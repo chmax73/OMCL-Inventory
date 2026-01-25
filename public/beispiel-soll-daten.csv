@@ -1,0 +1,8 @@
+Primärschlüssel,Lagerplatz,Raum,Bezeichnung,Temperatur,Ablaufdatum
+M-022272,K1-A01,Kühlraum 1,Muster Ibuprofen 400mg,2-8°C,2027-06-30
+M-022273,K1-A02,Kühlraum 1,Muster Paracetamol 500mg,2-8°C,2027-12-15
+M-022274,K1-B01,Kühlraum 1,Muster Aspirin 100mg,2-8°C,2026-09-30
+S-0009-001,K2-A01,Kühlraum 2,Referenzsubstanz Koffein,15-25°C,2028-01-01
+S-0009-002,K2-A02,Kühlraum 2,Referenzsubstanz Acetylsalicylsäure,15-25°C,2027-08-15
+S-0010-001,L1-A01,Lager 1,Prüfsubstanz Vitamin C,-20°C,2026-12-31
+M-022275,L1-B01,Lager 1,Muster Omeprazol 20mg,15-25°C,2027-03-20
