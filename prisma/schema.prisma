@@ -1,0 +1,156 @@
+// =============================================================================
+// OMCL Inventur Tool - Prisma Schema
+// =============================================================================
+// Dieses Schema definiert alle Datenbanktabellen für die Inventurverwaltung.
+// Basiert auf dem PRD für Swissmedic OMCL nach ISO/IEC 17025:2017.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS - Vordefinierte Werte für bestimmte Felder
+// -----------------------------------------------------------------------------
+
+// Benutzerrolle: Bestimmt die Berechtigungen eines Users
+enum UserRole {
+  admin          // Vollzugriff auf alle Funktionen
+  verantwortlich // Kann Inventare erstellen und abschliessen
+  user           // Kann nur scannen und Abweichungen melden
+}
+
+// Warentyp: Unterscheidet zwischen Mustern und Substanzen
+enum WareTyp {
+  muster   // Physische Muster (Barcode-Präfix: M-)
+  substanz // Chemische Substanzen (Barcode-Präfix: S-)
+}
+
+// Scan-Typ: Ergebnis eines Barcode-Scans
+enum ScanTyp {
+  ok     // Ware am richtigen Lagerplatz gefunden
+  falsch // Ware am falschen Lagerplatz gefunden
+  neu    // Ware nicht im SOLL-Bestand (unbekannt)
+}
+
+// Abweichungstyp: Art der festgestellten Differenz
+enum AbweichungTyp {
+  fehlend // Ware im SOLL, aber nicht gescannt
+  falsch  // Ware am falschen Lagerplatz
+  neu     // Ware gescannt, aber nicht im SOLL
+}
+
+// -----------------------------------------------------------------------------
+// TABELLEN
+// -----------------------------------------------------------------------------
+
+// Users - Benutzer des Systems
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  rolle     UserRole @default(user)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationen
+  erstellteInventare Inventar[]   @relation("ErstelltVon")
+  scans              WareIst[]    @relation("GescnanntVon")
+  bestaetigungen     Abweichung[] @relation("BestaetigtVon")
+  auditLogs          AuditTrail[] @relation("AuditUser")
+
+  @@map("users")
+}
+
+// Inventar - Ein Inventurvorgang (jährlich)
+model Inventar {
+  id         String    @id @default(uuid())
+  erstelltAm DateTime  @default(now()) @map("erstellt_am")
+  erstelltVonId String @map("erstellt_von")
+  abgeschlossen Boolean @default(false)
+  abgeschlossenAm DateTime? @map("abgeschlossen_am")
+
+  // Relationen
+  erstelltVon User         @relation("ErstelltVon", fields: [erstelltVonId], references: [id])
+  sollWaren   WareSoll[]
+  istWaren    WareIst[]
+  abweichungen Abweichung[]
+  auditLogs   AuditTrail[]
+
+  @@map("inventar")
+}
+
+// WareSoll - SOLL-Bestand aus LIMS-Export (Excel)
+model WareSoll {
+  id              String   @id @default(uuid())
+  inventarId      String   @map("inventar_id")
+  typ             WareTyp
+  primarschluessel String  // Eindeutiger Barcode (z.B. M-022272, S-0009-001)
+  lagerplatzCode  String   @map("lagerplatz_code")
+  raum            String?
+  bezeichnung     String?
+  temperatur      String?
+  expDatum        DateTime? @map("exp_datum")
+
+  // Relationen
+  inventar Inventar @relation(fields: [inventarId], references: [id], onDelete: Cascade)
+
+  @@unique([inventarId, primarschluessel])
+  @@map("ware_soll")
+}
+
+// WareIst - IST-Bestand aus Barcode-Scans
+model WareIst {
+  id              String   @id @default(uuid())
+  inventarId      String   @map("inventar_id")
+  primarschluessel String  // Gescannter Barcode
+  lagerplatzCode  String   @map("lagerplatz_code")
+  timestamp       DateTime @default(now())
+  userId          String   @map("user_id")
+  scanTyp         ScanTyp  @map("scan_typ")
+
+  // Relationen
+  inventar Inventar @relation(fields: [inventarId], references: [id], onDelete: Cascade)
+  user     User     @relation("GescnanntVon", fields: [userId], references: [id])
+
+  @@map("ware_ist")
+}
+
+// Abweichung - Festgestellte Differenzen zwischen SOLL und IST
+model Abweichung {
+  id              String        @id @default(uuid())
+  inventarId      String        @map("inventar_id")
+  primarschluessel String       // Betroffener Barcode
+  typ             AbweichungTyp
+  kommentar       String?
+  bestaetigtDurchId String?     @map("bestaetigt_durch")
+  bestaetigtAm    DateTime?     @map("bestaetigt_am")
+
+  // Relationen
+  inventar       Inventar @relation(fields: [inventarId], references: [id], onDelete: Cascade)
+  bestaetigtDurch User?   @relation("BestaetigtVon", fields: [bestaetigtDurchId], references: [id])
+
+  @@map("abweichung")
+}
+
+// AuditTrail - Protokoll aller Aktionen (für ISO 17025 Compliance)
+model AuditTrail {
+  id         String   @id @default(uuid())
+  timestamp  DateTime @default(now())
+  userId     String   @map("user_id")
+  aktion     String   // z.B. "inventar_erstellt", "scan_durchgefuehrt", "abweichung_bestaetigt"
+  entitaet   String   // z.B. "inventar", "ware_ist", "abweichung"
+  referenzId String?  @map("referenz_id") // ID des betroffenen Objekts
+  details    String?  // Zusätzliche Informationen (JSON)
+  inventarId String?  @map("inventar_id")
+
+  // Relationen
+  user     User      @relation("AuditUser", fields: [userId], references: [id])
+  inventar Inventar? @relation(fields: [inventarId], references: [id], onDelete: Cascade)
+
+  @@map("audit_trail")
+}
