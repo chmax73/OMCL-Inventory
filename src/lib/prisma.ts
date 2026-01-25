@@ -6,7 +6,7 @@
  * Verbindungen öffnen).
  */
 
-import { PrismaClient } from "@/generated/prisma";
+import { PrismaClient } from "@prisma/client";
 
 // Globale Variable für den Prisma Client (nur in Development)
 const globalForPrisma = globalThis as unknown as {

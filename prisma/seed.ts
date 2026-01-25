@@ -5,7 +5,7 @@
  * Es wird mit `npx prisma db seed` ausgeführt.
  */
 
-import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp } from "../src/generated/prisma";
+import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
