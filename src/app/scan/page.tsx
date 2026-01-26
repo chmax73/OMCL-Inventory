@@ -176,7 +176,7 @@ export default function ScanPage() {
                     </div>
                 </div>
 
-                {/* Suche */}
+                {/* Suche mit Auto-Select bei exaktem Match */}
                 <div className="form-control">
                     <div className="input-group">
                         <span className="bg-base-200">
@@ -184,10 +184,22 @@ export default function ScanPage() {
                         </span>
                         <input
                             type="text"
-                            placeholder="Lagerplatz oder Raum suchen..."
+                            placeholder="Lagerplatz scannen oder suchen..."
                             className="input input-bordered w-full"
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setSearchTerm(value);
+                                // Auto-Select wenn exakter Match gefunden
+                                const exactMatch = lagerplaetze.find(
+                                    (lp) => lp.code.toLowerCase() === value.toLowerCase()
+                                );
+                                if (exactMatch) {
+                                    setSelectedLagerplatz(exactMatch.code);
+                                    setSearchTerm("");
+                                }
+                            }}
+                            autoFocus
                         />
                     </div>
                 </div>
@@ -294,10 +306,10 @@ export default function ScanPage() {
                     {lastScanResult && (
                         <div
                             className={`alert mt-4 ${lastScanResult.success
-                                    ? lastScanResult.scanTyp === "ok"
-                                        ? "alert-success"
-                                        : "alert-warning"
-                                    : "alert-error"
+                                ? lastScanResult.scanTyp === "ok"
+                                    ? "alert-success"
+                                    : "alert-warning"
+                                : "alert-error"
                                 }`}
                         >
                             {lastScanResult.success ? (
@@ -315,13 +327,16 @@ export default function ScanPage() {
                 </div>
             </div>
 
-            {/* SOLL-Waren-Liste */}
+            {/* Waren-Liste (SOLL + NEU gefunden) */}
             <div className="card bg-base-200">
                 <div className="card-body">
                     <h2 className="card-title">
-                        Erwartete Waren
+                        Waren an diesem Lagerplatz
                         {unscannedCount > 0 && (
                             <span className="badge badge-warning">{unscannedCount} offen</span>
+                        )}
+                        {sollWaren.filter(w => w.isNeu).length > 0 && (
+                            <span className="badge badge-info">{sollWaren.filter(w => w.isNeu).length} neu gefunden</span>
                         )}
                     </h2>
 
@@ -336,36 +351,53 @@ export default function ScanPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {sollWaren.map((ware) => (
-                                    <tr key={ware.id} className={ware.gescannt ? "opacity-50" : ""}>
+                                {/* Zuerst SOLL-Waren (nicht gescannt) */}
+                                {sollWaren.filter(w => !w.isNeu && !w.gescannt).map((ware) => (
+                                    <tr key={ware.id}>
                                         <td>
-                                            {ware.gescannt ? (
-                                                ware.scanTyp === "ok" ? (
-                                                    <span className="badge badge-success gap-1">
-                                                        <CheckCircle className="w-3 h-3" />
-                                                        OK
-                                                    </span>
-                                                ) : ware.scanTyp === "falsch" ? (
-                                                    <span className="badge badge-warning gap-1">
-                                                        <AlertTriangle className="w-3 h-3" />
-                                                        Falsch
-                                                    </span>
-                                                ) : (
-                                                    <span className="badge badge-info gap-1">
-                                                        <AlertTriangle className="w-3 h-3" />
-                                                        Neu
-                                                    </span>
-                                                )
+                                            <span className="badge badge-ghost gap-1">
+                                                <Package className="w-3 h-3" />
+                                                Offen
+                                            </span>
+                                        </td>
+                                        <td className="font-mono">{ware.primarschluessel}</td>
+                                        <td>{ware.bezeichnung || "-"}</td>
+                                        <td>{ware.temperatur || "-"}</td>
+                                    </tr>
+                                ))}
+                                {/* Dann gescannte SOLL-Waren */}
+                                {sollWaren.filter(w => !w.isNeu && w.gescannt).map((ware) => (
+                                    <tr key={ware.id} className="opacity-50">
+                                        <td>
+                                            {ware.scanTyp === "ok" ? (
+                                                <span className="badge badge-success gap-1">
+                                                    <CheckCircle className="w-3 h-3" />
+                                                    OK
+                                                </span>
                                             ) : (
-                                                <span className="badge badge-ghost gap-1">
-                                                    <Package className="w-3 h-3" />
-                                                    Offen
+                                                <span className="badge badge-warning gap-1">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    Falsch
                                                 </span>
                                             )}
                                         </td>
                                         <td className="font-mono">{ware.primarschluessel}</td>
                                         <td>{ware.bezeichnung || "-"}</td>
                                         <td>{ware.temperatur || "-"}</td>
+                                    </tr>
+                                ))}
+                                {/* Zuletzt NEU gefundene Waren */}
+                                {sollWaren.filter(w => w.isNeu).map((ware) => (
+                                    <tr key={ware.id} className="bg-info/10">
+                                        <td>
+                                            <span className="badge badge-info gap-1">
+                                                <AlertTriangle className="w-3 h-3" />
+                                                Neu gefunden
+                                            </span>
+                                        </td>
+                                        <td className="font-mono">{ware.primarschluessel}</td>
+                                        <td className="italic text-base-content/50">Nicht im SOLL</td>
+                                        <td>-</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -28,7 +28,7 @@ export type LagerplatzInfo = {
     completed: boolean;
 };
 
-// Typ für eine SOLL-Ware
+// Typ für eine Ware (SOLL oder NEU gefunden)
 export type SollWare = {
     id: string;
     primarschluessel: string;
@@ -36,6 +36,7 @@ export type SollWare = {
     temperatur: string | null;
     gescannt: boolean;
     scanTyp: ScanTyp | null;
+    isNeu: boolean; // true wenn nicht im SOLL-Bestand
 };
 
 // Typ für das Scan-Ergebnis
@@ -54,7 +55,6 @@ export async function getActiveInventar(): Promise<ActiveInventar | null> {
             _count: {
                 select: {
                     sollWaren: true,
-                    istWaren: true,
                 },
             },
         },
@@ -62,11 +62,19 @@ export async function getActiveInventar(): Promise<ActiveInventar | null> {
 
     if (!inventar) return null;
 
+    // Nur OK-Scans zählen (nicht NEU oder FALSCH)
+    const okScansCount = await prisma.wareIst.count({
+        where: {
+            inventarId: inventar.id,
+            scanTyp: ScanTyp.ok,
+        },
+    });
+
     return {
         id: inventar.id,
         erstelltAm: inventar.erstelltAm,
         sollWarenCount: inventar._count.sollWaren,
-        istWarenCount: inventar._count.istWaren,
+        istWarenCount: okScansCount,
     };
 }
 
@@ -81,9 +89,12 @@ export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInf
         },
     });
 
-    // Alle IST-Scans gruppiert nach Lagerplatz
+    // Nur OK-Scans zählen (nicht NEU oder FALSCH)
     const istWaren = await prisma.wareIst.findMany({
-        where: { inventarId },
+        where: {
+            inventarId,
+            scanTyp: ScanTyp.ok,
+        },
         select: {
             lagerplatzCode: true,
         },
@@ -121,7 +132,7 @@ export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInf
     );
 }
 
-// SOLL-Waren für einen Lagerplatz laden
+// SOLL-Waren für einen Lagerplatz laden (inkl. NEU gefundene Waren)
 export async function getSollWarenForLagerplatz(
     inventarId: string,
     lagerplatzCode: string
@@ -141,22 +152,43 @@ export async function getSollWarenForLagerplatz(
             lagerplatzCode,
         },
         select: {
+            id: true,
             primarschluessel: true,
             scanTyp: true,
         },
     });
 
     // Map für schnellen Lookup
-    const istMap = new Map(istWaren.map((i) => [i.primarschluessel, i.scanTyp]));
+    const istMap = new Map(istWaren.map((i) => [i.primarschluessel, { scanTyp: i.scanTyp, id: i.id }]));
 
-    return sollWaren.map((soll) => ({
+    // SOLL-Waren mit Scan-Status
+    const result: SollWare[] = sollWaren.map((soll) => ({
         id: soll.id,
         primarschluessel: soll.primarschluessel,
         bezeichnung: soll.bezeichnung,
         temperatur: soll.temperatur,
         gescannt: istMap.has(soll.primarschluessel),
-        scanTyp: istMap.get(soll.primarschluessel) || null,
+        scanTyp: istMap.get(soll.primarschluessel)?.scanTyp || null,
+        isNeu: false,
     }));
+
+    // NEU gefundene Waren hinzufügen (nicht im SOLL-Bestand)
+    const sollPrimarschluessel = new Set(sollWaren.map((s) => s.primarschluessel));
+    for (const ist of istWaren) {
+        if (!sollPrimarschluessel.has(ist.primarschluessel)) {
+            result.push({
+                id: ist.id,
+                primarschluessel: ist.primarschluessel,
+                bezeichnung: null,
+                temperatur: null,
+                gescannt: true,
+                scanTyp: ist.scanTyp,
+                isNeu: true,
+            });
+        }
+    }
+
+    return result;
 }
 
 // Barcode scannen und IST-Eintrag erstellen
