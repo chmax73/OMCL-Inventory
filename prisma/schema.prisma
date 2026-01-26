@@ -62,6 +62,7 @@ model User {
   scans              WareIst[]    @relation("GescnanntVon")
   bestaetigungen     Abweichung[] @relation("BestaetigtVon")
   auditLogs          AuditTrail[] @relation("AuditUser")
+  lagerplatzPruefungen LagerplatzUeberprueft[] @relation("UeberprueftVon")
 
   @@map("users")
 }
@@ -80,6 +81,7 @@ model Inventar {
   istWaren    WareIst[]
   abweichungen Abweichung[]
   auditLogs   AuditTrail[]
+  lagerplatzPruefungen LagerplatzUeberprueft[]
 
   @@map("inventar")
 }
@@ -135,6 +137,22 @@ model Abweichung {
   bestaetigtDurch User?   @relation("BestaetigtVon", fields: [bestaetigtDurchId], references: [id])
 
   @@map("abweichung")
+}
+
+// LagerplatzUeberprueft - Bestätigte Lagerplätze
+model LagerplatzUeberprueft {
+  id             String   @id @default(uuid())
+  inventarId     String   @map("inventar_id")
+  lagerplatzCode String   @map("lagerplatz_code")
+  ueberprueftAm  DateTime @default(now()) @map("ueberprueft_am")
+  ueberprueftVonId String @map("ueberprueft_von")
+
+  // Relationen
+  inventar       Inventar @relation(fields: [inventarId], references: [id], onDelete: Cascade)
+  ueberprueftVon User     @relation("UeberprueftVon", fields: [ueberprueftVonId], references: [id])
+
+  @@unique([inventarId, lagerplatzCode])
+  @@map("lagerplatz_ueberprueft")
 }
 
 // AuditTrail - Protokoll aller Aktionen (für ISO 17025 Compliance)

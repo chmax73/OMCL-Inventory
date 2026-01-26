@@ -25,6 +25,8 @@ import {
     getLagerplaetze,
     getSollWarenForLagerplatz,
     scanBarcode,
+    confirmLagerplatz,
+    isLagerplatzUeberprueft,
     type ActiveInventar,
     type LagerplatzInfo,
     type SollWare,
@@ -45,6 +47,8 @@ export default function ScanPage() {
     const [barcode, setBarcode] = useState("");
     const [lastScanResult, setLastScanResult] = useState<ScanResult | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [isUeberprueft, setIsUeberprueft] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
 
     // Daten laden
     useEffect(() => {
@@ -62,12 +66,15 @@ export default function ScanPage() {
         loadData();
     }, []);
 
-    // SOLL-Waren laden wenn Lagerplatz gewählt
+    // SOLL-Waren und Überprüft-Status laden wenn Lagerplatz gewählt
     useEffect(() => {
         async function loadSollWaren() {
             if (inventar && selectedLagerplatz) {
                 const waren = await getSollWarenForLagerplatz(inventar.id, selectedLagerplatz);
                 setSollWaren(waren);
+                // Überprüft-Status laden
+                const ueberprueft = await isLagerplatzUeberprueft(inventar.id, selectedLagerplatz);
+                setIsUeberprueft(ueberprueft);
                 // Fokus auf Barcode-Input
                 setTimeout(() => barcodeInputRef.current?.focus(), 100);
             }
@@ -103,6 +110,25 @@ export default function ScanPage() {
             e.preventDefault();
             handleScan();
         }
+    };
+
+    // Lagerplatz als überprüft markieren
+    const handleConfirmLagerplatz = async () => {
+        if (!inventar || !selectedLagerplatz || !user) return;
+
+        setIsConfirming(true);
+        const result = await confirmLagerplatz(inventar.id, selectedLagerplatz, user.id);
+
+        if (result.success) {
+            setIsUeberprueft(true);
+            // Zurück zur Lagerplatz-Auswahl
+            setTimeout(() => {
+                setSelectedLagerplatz(null);
+                setIsUeberprueft(false);
+            }, 1500);
+        }
+
+        setIsConfirming(false);
     };
 
     // Gefilterte Lagerplätze
@@ -402,6 +428,34 @@ export default function ScanPage() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Bestätigungs-Button */}
+                    <div className="mt-6 flex justify-end">
+                        {isUeberprueft ? (
+                            <div className="alert alert-success">
+                                <CheckCircle className="w-5 h-5" />
+                                <span>Lagerplatz wurde als überprüft markiert!</span>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleConfirmLagerplatz}
+                                disabled={isConfirming}
+                                className="btn btn-success btn-lg gap-2"
+                            >
+                                {isConfirming ? (
+                                    <>
+                                        <span className="loading loading-spinner loading-sm"></span>
+                                        Wird bestätigt...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="w-5 h-5" />
+                                        Scan Lagerposition beendet
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

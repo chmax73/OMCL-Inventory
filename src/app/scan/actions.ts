@@ -279,3 +279,71 @@ export async function scanBarcode(
         return { success: false, error: "Ein unerwarteter Fehler ist aufgetreten" };
     }
 }
+
+// Lagerplatz als überprüft markieren
+export async function confirmLagerplatz(
+    inventarId: string,
+    lagerplatzCode: string,
+    userId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        // Prüfen ob bereits überprüft
+        const existing = await prisma.lagerplatzUeberprueft.findUnique({
+            where: {
+                inventarId_lagerplatzCode: {
+                    inventarId,
+                    lagerplatzCode,
+                },
+            },
+        });
+
+        if (existing) {
+            return { success: false, error: "Lagerplatz wurde bereits als überprüft markiert" };
+        }
+
+        // Als überprüft markieren
+        await prisma.lagerplatzUeberprueft.create({
+            data: {
+                inventarId,
+                lagerplatzCode,
+                ueberprueftVonId: userId,
+            },
+        });
+
+        // Audit-Log erstellen
+        await prisma.auditTrail.create({
+            data: {
+                userId,
+                aktion: "lagerplatz_ueberprueft",
+                entitaet: "lagerplatz",
+                referenzId: lagerplatzCode,
+                inventarId,
+                details: JSON.stringify({ lagerplatzCode }),
+            },
+        });
+
+        // Cache invalidieren
+        revalidatePath("/scan");
+
+        return { success: true };
+    } catch (error) {
+        console.error("Fehler beim Bestätigen:", error);
+        return { success: false, error: "Ein unerwarteter Fehler ist aufgetreten" };
+    }
+}
+
+// Prüfen ob Lagerplatz überprüft wurde
+export async function isLagerplatzUeberprueft(
+    inventarId: string,
+    lagerplatzCode: string
+): Promise<boolean> {
+    const result = await prisma.lagerplatzUeberprueft.findUnique({
+        where: {
+            inventarId_lagerplatzCode: {
+                inventarId,
+                lagerplatzCode,
+            },
+        },
+    });
+    return !!result;
+}
