@@ -25,10 +25,33 @@ import { useUser } from "@/context/UserContext";
 import {
     getAuditTrail,
     getInventareForFilter,
-    getAktionLabel,
-    getEntitaetLabel,
     type AuditEntry,
 } from "./actions";
+
+// Helper-Funktionen lokal definiert (keine Server Actions)
+function getAktionLabel(aktion: string): string {
+    switch (aktion) {
+        case "inventar_erstellt": return "Inventar erstellt";
+        case "inventar_abgeschlossen": return "Inventar abgeschlossen";
+        case "excel_upload": return "Excel hochgeladen";
+        case "barcode_gescannt": return "Barcode gescannt";
+        case "abweichung_erstellt": return "Abweichung erfasst";
+        case "abweichung_bestaetigt": return "Abweichung bestätigt";
+        case "lagerplatz_ueberprueft": return "Lagerplatz überprüft";
+        case "lagerplatz_wiedereroeffnet": return "Lagerplatz wiedereröffnet";
+        default: return aktion;
+    }
+}
+
+function getEntitaetLabel(entitaet: string): string {
+    switch (entitaet) {
+        case "inventar": return "Inventar";
+        case "ware_ist": return "IST-Ware";
+        case "abweichung": return "Abweichung";
+        case "lagerplatz": return "Lagerplatz";
+        default: return entitaet;
+    }
+}
 
 export default function AuditPage() {
     const router = useRouter();

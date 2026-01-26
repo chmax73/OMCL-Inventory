@@ -19,8 +19,8 @@ export type AuditEntry = {
     details: string | null;
 };
 
-// Aktion-Labels für die Anzeige
-export function getAktionLabel(aktion: string): string {
+// Aktion-Labels für die Anzeige (nicht exportiert, wird in der Page verwendet)
+function getAktionLabel(aktion: string): string {
     switch (aktion) {
         case "inventar_erstellt": return "Inventar erstellt";
         case "inventar_abgeschlossen": return "Inventar abgeschlossen";
@@ -34,8 +34,8 @@ export function getAktionLabel(aktion: string): string {
     }
 }
 
-// Entitäts-Labels für die Anzeige
-export function getEntitaetLabel(entitaet: string): string {
+// Entitäts-Labels für die Anzeige (nicht exportiert)
+function getEntitaetLabel(entitaet: string): string {
     switch (entitaet) {
         case "inventar": return "Inventar";
         case "ware_ist": return "IST-Ware";
