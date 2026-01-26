@@ -26,6 +26,7 @@ export type LagerplatzInfo = {
     sollCount: number;
     istCount: number;
     completed: boolean;
+    ueberprueft: boolean; // true wenn Lagerplatz als überprüft markiert
 };
 
 // Typ für eine Ware (SOLL oder NEU gefunden)
@@ -100,6 +101,13 @@ export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInf
         },
     });
 
+    // Überprüfte Lagerplätze laden
+    const ueberpruefteLagerplaetze = await prisma.lagerplatzUeberprueft.findMany({
+        where: { inventarId },
+        select: { lagerplatzCode: true },
+    });
+    const ueberprueftSet = new Set(ueberpruefteLagerplaetze.map(u => u.lagerplatzCode));
+
     // Lagerplätze aggregieren
     const lagerplaetzeMap = new Map<string, LagerplatzInfo>();
 
@@ -114,6 +122,7 @@ export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInf
                 sollCount: 1,
                 istCount: 0,
                 completed: false,
+                ueberprueft: ueberprueftSet.has(soll.lagerplatzCode),
             });
         }
     }
@@ -346,4 +355,40 @@ export async function isLagerplatzUeberprueft(
         },
     });
     return !!result;
+}
+
+// Lagerplatz wiedereröffnen (Überprüft-Status entfernen)
+export async function reopenLagerplatz(
+    inventarId: string,
+    lagerplatzCode: string,
+    userId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await prisma.lagerplatzUeberprueft.delete({
+            where: {
+                inventarId_lagerplatzCode: {
+                    inventarId,
+                    lagerplatzCode,
+                },
+            },
+        });
+
+        // Audit-Log erstellen
+        await prisma.auditTrail.create({
+            data: {
+                userId,
+                aktion: "lagerplatz_wiedereroeffnet",
+                entitaet: "lagerplatz",
+                referenzId: lagerplatzCode,
+                inventarId,
+                details: JSON.stringify({ lagerplatzCode }),
+            },
+        });
+
+        revalidatePath("/scan");
+        return { success: true };
+    } catch (error) {
+        console.error("Fehler beim Wiedereröffnen:", error);
+        return { success: false, error: "Lagerplatz konnte nicht wiedereröffnet werden" };
+    }
 }

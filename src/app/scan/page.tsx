@@ -27,6 +27,7 @@ import {
     scanBarcode,
     confirmLagerplatz,
     isLagerplatzUeberprueft,
+    reopenLagerplatz,
     type ActiveInventar,
     type LagerplatzInfo,
     type SollWare,
@@ -233,24 +234,30 @@ export default function ScanPage() {
                 {/* Lagerplatz-Liste */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredLagerplaetze.map((lp) => (
-                        <button
+                        <div
                             key={lp.code}
-                            onClick={() => setSelectedLagerplatz(lp.code)}
-                            className={`card bg-base-200 hover:bg-base-300 transition-colors cursor-pointer ${lp.completed ? "border-2 border-success" : ""
+                            className={`card transition-colors ${lp.ueberprueft
+                                    ? "bg-success/20 border-2 border-success"
+                                    : "bg-base-200 hover:bg-base-300"
                                 }`}
                         >
                             <div className="card-body p-4">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <MapPin className={`w-5 h-5 ${lp.completed ? "text-success" : "text-primary"}`} />
+                                        <MapPin className={`w-5 h-5 ${lp.ueberprueft ? "text-success" : "text-primary"}`} />
                                         <span className="font-bold">{lp.code}</span>
                                     </div>
-                                    {lp.completed && <CheckCircle className="w-5 h-5 text-success" />}
+                                    {lp.ueberprueft && (
+                                        <span className="badge badge-success gap-1">
+                                            <CheckCircle className="w-3 h-3" />
+                                            Überprüft
+                                        </span>
+                                    )}
                                 </div>
                                 {lp.raum && <p className="text-sm text-base-content/70">{lp.raum}</p>}
                                 <div className="mt-2">
                                     <progress
-                                        className={`progress w-full ${lp.completed ? "progress-success" : "progress-warning"}`}
+                                        className={`progress w-full ${lp.ueberprueft ? "progress-success" : "progress-warning"}`}
                                         value={lp.istCount}
                                         max={lp.sollCount}
                                     ></progress>
@@ -258,8 +265,31 @@ export default function ScanPage() {
                                         {lp.istCount} / {lp.sollCount}
                                     </p>
                                 </div>
+                                {/* Buttons */}
+                                <div className="mt-3 flex gap-2">
+                                    {lp.ueberprueft ? (
+                                        <button
+                                            onClick={async () => {
+                                                if (!inventar || !user) return;
+                                                await reopenLagerplatz(inventar.id, lp.code, user.id);
+                                                const plaetze = await getLagerplaetze(inventar.id);
+                                                setLagerplaetze(plaetze);
+                                            }}
+                                            className="btn btn-sm btn-outline btn-warning flex-1"
+                                        >
+                                            Wiedereröffnen
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => setSelectedLagerplatz(lp.code)}
+                                            className="btn btn-sm btn-primary flex-1"
+                                        >
+                                            Scannen
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                        </button>
+                        </div>
                     ))}
                 </div>
 
