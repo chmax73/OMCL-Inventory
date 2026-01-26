@@ -8,7 +8,7 @@
  */
 
 import Link from "next/link";
-import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle } from "lucide-react";
+import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText } from "lucide-react";
 import { getDashboardStats, getInventarList } from "./actions";
 
 export default async function Dashboard() {
@@ -120,15 +120,22 @@ export default async function Dashboard() {
                           ></progress>
                           <span className="ml-2 text-sm">{inv.istScans}/{inv.sollWaren}</span>
                         </td>
-                        <td>
+                        <td className="flex gap-2">
                           {inv.abgeschlossen ? (
-                            <Link href={`/inventar/${inv.id}`} className="btn btn-sm btn-ghost">
-                              Ansehen
+                            <Link href={`/inventar/${inv.id}/report`} className="btn btn-sm btn-primary gap-1">
+                              <FileText className="w-3 h-3" />
+                              Report
                             </Link>
                           ) : (
-                            <Link href="/scan" className="btn btn-sm btn-primary">
-                              Weiter scannen
-                            </Link>
+                            <>
+                              <Link href="/scan" className="btn btn-sm btn-primary">
+                                Weiter scannen
+                              </Link>
+                              <Link href={`/inventar/${inv.id}/abschliessen`} className="btn btn-sm btn-success gap-1">
+                                <Lock className="w-3 h-3" />
+                                Abschliessen
+                              </Link>
+                            </>
                           )}
                         </td>
                       </tr>

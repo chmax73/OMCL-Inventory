@@ -200,6 +200,16 @@ export async function getSollWarenForLagerplatz(
     return result;
 }
 
+// Barcode-Format validieren (M-XXXXXX für Muster, S-XXXX-XXX für Substanzen)
+function isValidBarcode(barcode: string): boolean {
+    // Muster-Format: M- gefolgt von 6 Ziffern (z.B. M-022272)
+    const musterPattern = /^M-\d{6}$/i;
+    // Substanz-Format: S- gefolgt von 4 Ziffern, Bindestrich, 3 Ziffern (z.B. S-0009-001)
+    const substanzPattern = /^S-\d{4}-\d{3}$/i;
+
+    return musterPattern.test(barcode) || substanzPattern.test(barcode);
+}
+
 // Barcode scannen und IST-Eintrag erstellen
 export async function scanBarcode(
     inventarId: string,
@@ -208,6 +218,14 @@ export async function scanBarcode(
     userId: string
 ): Promise<ScanResult> {
     try {
+        // Barcode-Format validieren
+        if (!isValidBarcode(barcode)) {
+            return {
+                success: false,
+                error: `Ungültiges Barcode-Format: "${barcode}". Erwartet: M-XXXXXX oder S-XXXX-XXX`,
+            };
+        }
+
         // Prüfen ob bereits gescannt
         const existing = await prisma.wareIst.findFirst({
             where: {
