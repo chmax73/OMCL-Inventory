@@ -312,7 +312,7 @@ export async function confirmLagerplatz(
     inventarId: string,
     lagerplatzCode: string,
     userId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; fehlendeWaren?: number }> {
     try {
         // Prüfen ob bereits überprüft
         const existing = await prisma.lagerplatzUeberprueft.findUnique({
@@ -326,6 +326,46 @@ export async function confirmLagerplatz(
 
         if (existing) {
             return { success: false, error: "Lagerplatz wurde bereits als überprüft markiert" };
+        }
+
+        // SOLL-Waren für diesen Lagerplatz laden
+        const sollWaren = await prisma.wareSoll.findMany({
+            where: { inventarId, lagerplatzCode },
+            select: { primarschluessel: true },
+        });
+
+        // Bereits gescannte IST-Waren laden (nur OK-Scans zählen)
+        const istWaren = await prisma.wareIst.findMany({
+            where: {
+                inventarId,
+                lagerplatzCode,
+                scanTyp: "ok",
+            },
+            select: { primarschluessel: true },
+        });
+        const gescannteSet = new Set(istWaren.map(i => i.primarschluessel));
+
+        // Bereits existierende Abweichungen laden
+        const existingAbweichungen = await prisma.abweichung.findMany({
+            where: { inventarId },
+            select: { primarschluessel: true },
+        });
+        const abweichungSet = new Set(existingAbweichungen.map(a => a.primarschluessel));
+
+        // Fehlende Waren ermitteln (nicht gescannt und noch keine Abweichung)
+        const fehlendeWaren = sollWaren.filter(
+            s => !gescannteSet.has(s.primarschluessel) && !abweichungSet.has(s.primarschluessel)
+        );
+
+        // Abweichungen für fehlende Waren erstellen
+        if (fehlendeWaren.length > 0) {
+            await prisma.abweichung.createMany({
+                data: fehlendeWaren.map(w => ({
+                    inventarId,
+                    primarschluessel: w.primarschluessel,
+                    typ: "fehlend" as const,
+                })),
+            });
         }
 
         // Als überprüft markieren
@@ -345,14 +385,18 @@ export async function confirmLagerplatz(
                 entitaet: "lagerplatz",
                 referenzId: lagerplatzCode,
                 inventarId,
-                details: JSON.stringify({ lagerplatzCode }),
+                details: JSON.stringify({
+                    lagerplatzCode,
+                    fehlendeWaren: fehlendeWaren.length,
+                }),
             },
         });
 
         // Cache invalidieren
         revalidatePath("/scan");
+        revalidatePath("/abweichungen");
 
-        return { success: true };
+        return { success: true, fehlendeWaren: fehlendeWaren.length };
     } catch (error) {
         console.error("Fehler beim Bestätigen:", error);
         return { success: false, error: "Ein unerwarteter Fehler ist aufgetreten" };

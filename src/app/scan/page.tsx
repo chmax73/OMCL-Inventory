@@ -113,6 +113,9 @@ export default function ScanPage() {
         }
     };
 
+    // State für Anzahl fehlender Waren
+    const [fehlendeWarenCount, setFehlendeWarenCount] = useState<number | null>(null);
+
     // Lagerplatz als überprüft markieren
     const handleConfirmLagerplatz = async () => {
         if (!inventar || !selectedLagerplatz || !user) return;
@@ -122,11 +125,13 @@ export default function ScanPage() {
 
         if (result.success) {
             setIsUeberprueft(true);
-            // Zurück zur Lagerplatz-Auswahl
+            setFehlendeWarenCount(result.fehlendeWaren || 0);
+            // Zurück zur Lagerplatz-Auswahl nach längerem Timeout wenn Abweichungen
             setTimeout(() => {
                 setSelectedLagerplatz(null);
                 setIsUeberprueft(false);
-            }, 1500);
+                setFehlendeWarenCount(null);
+            }, result.fehlendeWaren && result.fehlendeWaren > 0 ? 3000 : 1500);
         }
 
         setIsConfirming(false);
@@ -237,8 +242,8 @@ export default function ScanPage() {
                         <div
                             key={lp.code}
                             className={`card transition-colors ${lp.ueberprueft
-                                    ? "bg-success/20 border-2 border-success"
-                                    : "bg-base-200 hover:bg-base-300"
+                                ? "bg-success/20 border-2 border-success"
+                                : "bg-base-200 hover:bg-base-300"
                                 }`}
                         >
                             <div className="card-body p-4">
@@ -463,9 +468,16 @@ export default function ScanPage() {
                     {/* Bestätigungs-Button */}
                     <div className="mt-6 flex justify-end">
                         {isUeberprueft ? (
-                            <div className="alert alert-success">
+                            <div className={`alert ${fehlendeWarenCount && fehlendeWarenCount > 0 ? "alert-warning" : "alert-success"}`}>
                                 <CheckCircle className="w-5 h-5" />
-                                <span>Lagerplatz wurde als überprüft markiert!</span>
+                                <div>
+                                    <span className="font-bold">Lagerplatz wurde als überprüft markiert!</span>
+                                    {fehlendeWarenCount !== null && fehlendeWarenCount > 0 && (
+                                        <p className="text-sm mt-1">
+                                            {fehlendeWarenCount} fehlende Ware(n) als Abweichung erfasst.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         ) : (
                             <button

@@ -126,9 +126,9 @@ export default function AbweichungenPage() {
             case "fehlend":
                 return { label: "Fehlend", color: "badge-error", icon: XCircle };
             case "falsch":
-                return { label: "Falscher Ort", color: "badge-warning", icon: AlertTriangle };
+                return { label: "Falsch", color: "badge-warning", icon: AlertTriangle };
             case "neu":
-                return { label: "Neu gefunden", color: "badge-info", icon: Package };
+                return { label: "Neu", color: "badge-info", icon: Package };
         }
     };
 
