@@ -12,9 +12,8 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 // SSL-Zertifikatsprüfung für Supabase deaktivieren (selbstsignierte Zertifikate)
-if (process.env.NODE_ENV !== "production") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
+// Wird sowohl in Development als auch Production benötigt
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 // Globale Variable für den Prisma Client (nur in Development)
 const globalForPrisma = globalThis as unknown as {
