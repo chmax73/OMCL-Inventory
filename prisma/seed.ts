@@ -6,8 +6,19 @@
  */
 
 import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { config } from "dotenv";
+import path from "path";
 
-const prisma = new PrismaClient();
+// Lade Umgebungsvariablen aus .env.local
+config({ path: path.resolve(process.cwd(), ".env.local") });
+config({ path: path.resolve(process.cwd(), ".env") });
+
+// Prisma 7: Driver Adapter für PostgreSQL
+const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL
+});
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
     console.log("🌱 Starte Seeding...");
