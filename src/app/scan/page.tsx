@@ -273,17 +273,10 @@ export default function ScanPage() {
                                 {/* Buttons */}
                                 <div className="mt-3 flex gap-2">
                                     {lp.ueberprueft ? (
-                                        <button
-                                            onClick={async () => {
-                                                if (!inventar || !user) return;
-                                                await reopenLagerplatz(inventar.id, lp.code, user.id);
-                                                const plaetze = await getLagerplaetze(inventar.id);
-                                                setLagerplaetze(plaetze);
-                                            }}
-                                            className="btn btn-sm btn-outline btn-warning flex-1"
-                                        >
-                                            Wiedereröffnen
-                                        </button>
+                                        <span className="text-sm text-success font-semibold flex items-center gap-1">
+                                            <CheckCircle className="w-4 h-4" />
+                                            Abgeschlossen
+                                        </span>
                                     ) : (
                                         <button
                                             onClick={() => setSelectedLagerplatz(lp.code)}
