@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
     FileText,
     Download,
@@ -19,8 +20,16 @@ import {
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { getReportData, type ReportData } from "./actions";
-import { PDFDownloadLink } from "@react-pdf/renderer";
-import { InventarReportPDF } from "./InventarReportPDF";
+
+// Dynamischer Import für @react-pdf/renderer (nur Client-Side)
+const PDFDownloadLink = dynamic(
+    () => import("@react-pdf/renderer").then((mod) => mod.PDFDownloadLink),
+    { ssr: false, loading: () => <span className="loading loading-spinner loading-sm"></span> }
+);
+const InventarReportPDF = dynamic(
+    () => import("./InventarReportPDF").then((mod) => mod.InventarReportPDF),
+    { ssr: false }
+);
 
 export default function ReportPage() {
     const router = useRouter();
