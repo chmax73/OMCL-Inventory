@@ -25,8 +25,9 @@ const globalForPrisma = globalThis as unknown as {
 // rejectUnauthorized: false ist nötig wegen selbstsignierter Zertifikate
 const pool = globalForPrisma.pool ?? new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+  ssl: { rejectUnauthorized: false },
+  max: 1
+} as unknown as { connectionString?: string; ssl?: { rejectUnauthorized?: boolean } | boolean; max?: number });
 
 // Speichere Pool global um Connection-Leaks zu vermeiden
 if (process.env.NODE_ENV !== "production") {
