@@ -7,6 +7,9 @@
  * Dies ist eine Server Component - Daten werden direkt aus der DB geladen.
  */
 
+// Force dynamic rendering - keine statische Generierung während Build
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText } from "lucide-react";
 import { getDashboardStats, getInventarList } from "./actions";
