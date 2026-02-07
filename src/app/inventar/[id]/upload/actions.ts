@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import * as XLSX from "xlsx";
+// xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
 import { WareTyp } from "@prisma/client";
 
 // Typ für eine Zeile aus der Excel-Datei
@@ -45,11 +45,12 @@ function detectWareTyp(primarschluessel: string): WareTyp {
 }
 
 // Parst ein Datum aus verschiedenen Formaten
-function parseDate(value: unknown): Date | undefined {
+async function parseDate(value: unknown): Promise<Date | undefined> {
     if (!value) return undefined;
 
     // Excel-Seriennummer (Tage seit 1900)
     if (typeof value === "number") {
+        const XLSX = await import("xlsx");
         const date = XLSX.SSF.parse_date_code(value);
         if (date) {
             return new Date(date.y, date.m - 1, date.d);
@@ -91,6 +92,9 @@ export async function uploadExcel(
         if (!file) {
             return { success: false, error: "Keine Datei hochgeladen" };
         }
+
+        // xlsx dynamisch importieren (verhindert "location is not defined" auf Vercel)
+        const XLSX = await import("xlsx");
 
         // Datei als Buffer lesen
         const buffer = await file.arrayBuffer();
