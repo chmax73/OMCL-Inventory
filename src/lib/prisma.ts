@@ -12,6 +12,9 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
+// Supabase verwendet selbstsignierte Zertifikate → TLS-Verification deaktivieren
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 // Globale Variable für den Prisma Client (nur in Development)
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
