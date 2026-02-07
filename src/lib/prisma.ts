@@ -10,20 +10,28 @@
 
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-
-// SSL-Zertifikatsprüfung für Supabase deaktivieren (selbstsignierte Zertifikate)
-// Wird sowohl in Development als auch Production benötigt
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+import { Pool } from "pg";
 
 // Globale Variable für den Prisma Client (nur in Development)
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pool: Pool | undefined;
 };
 
-// Erstelle Driver Adapter für PostgreSQL
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL
+// Erstelle Pool mit SSL-Konfiguration für Supabase
+// rejectUnauthorized: false ist nötig wegen selbstsignierter Zertifikate
+const pool = globalForPrisma.pool ?? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
+
+// Speichere Pool global um Connection-Leaks zu vermeiden
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.pool = pool;
+}
+
+// Erstelle Driver Adapter für PostgreSQL
+const adapter = new PrismaPg(pool);
 
 // Erstelle oder verwende existierende Prisma-Instanz
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
