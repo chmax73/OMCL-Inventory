@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: "Inventarverwaltung für Swissmedic OMCL nach ISO/IEC 17025:2017",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{
