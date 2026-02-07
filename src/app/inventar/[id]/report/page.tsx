@@ -8,7 +8,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import dynamic from "next/dynamic";
 import {
     FileText,
     Download,
@@ -20,16 +19,6 @@ import {
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { getReportData, type ReportData } from "./actions";
-
-// Dynamischer Import für @react-pdf/renderer (nur Client-Side)
-const PDFDownloadLink = dynamic(
-    () => import("@react-pdf/renderer").then((mod) => mod.PDFDownloadLink),
-    { ssr: false, loading: () => <span className="loading loading-spinner loading-sm"></span> }
-);
-const InventarReportPDF = dynamic(
-    () => import("./InventarReportPDF").then((mod) => mod.InventarReportPDF),
-    { ssr: false }
-);
 
 export default function ReportPage() {
     const router = useRouter();
@@ -100,21 +89,13 @@ export default function ReportPage() {
                     </button>
                     <h1 className="text-3xl font-bold">Inventar-Report</h1>
                 </div>
-                <PDFDownloadLink
-                    document={<InventarReportPDF data={reportData} />}
-                    fileName={`inventar-report-${new Date(reportData.inventar.erstelltAm).toISOString().split("T")[0]}.pdf`}
+                <button
+                    className="btn btn-primary gap-2 btn-disabled"
+                    title="PDF-Export wird in einer zukünftigen Version verfügbar sein"
                 >
-                    {({ loading }) => (
-                        <button className="btn btn-primary gap-2" disabled={loading}>
-                            {loading ? (
-                                <span className="loading loading-spinner loading-sm"></span>
-                            ) : (
-                                <Download className="w-5 h-5" />
-                            )}
-                            PDF herunterladen
-                        </button>
-                    )}
-                </PDFDownloadLink>
+                    <Download className="w-5 h-5" />
+                    PDF (bald verfügbar)
+                </button>
             </div>
 
             {/* Inventar-Info */}
