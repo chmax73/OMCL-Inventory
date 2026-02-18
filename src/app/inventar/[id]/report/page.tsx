@@ -215,7 +215,7 @@ export default function ReportPage() {
                                     {reportData.abweichungen.map((a, i) => (
                                         <tr key={i}>
                                             <td>
-                                                <span className={`badge ${getTypColor(a.typ)} badge-sm`}>
+                                                <span className={`badge ${getTypColor(a.typ)} badge-sm whitespace-nowrap`}>
                                                     {getTypLabel(a.typ)}
                                                 </span>
                                             </td>
