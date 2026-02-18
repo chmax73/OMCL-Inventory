@@ -12,9 +12,6 @@ import { revalidatePath } from "next/cache";
 // xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
 import { WareTyp, BearbStatus } from "@prisma/client";
 
-// Maximale Ausführungszeit für Serverless Function (60s = Vercel Free Tier Max)
-export const maxDuration = 60;
-
 // Typ für eine Zeile aus der Excel-Datei
 type ExcelRow = {
     primarschluessel: string;
