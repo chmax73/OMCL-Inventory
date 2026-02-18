@@ -5,7 +5,7 @@
  * Es wird mit `npx prisma db seed` ausgeführt.
  */
 
-import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp } from "@prisma/client";
+import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp, BearbStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { config } from "dotenv";
 import path from "path";
@@ -144,6 +144,30 @@ async function main() {
             bezeichnung: "Referenzstandard Paracetamol",
             temperatur: "-20°C",
             expDatum: new Date("2025-11-30"),
+            bearbStatus: BearbStatus.erfasst,
+        },
+        // Vernichtete Waren (nur Kontroll-Einträge, kein Lagerort-Scan erwartet)
+        {
+            inventarId: inventar.id,
+            typ: WareTyp.muster,
+            primarschluessel: "M-022280",
+            lagerplatzCode: "VERNICHTET",
+            raum: null,
+            bezeichnung: "Altes Muster - vernichtet",
+            temperatur: null,
+            expDatum: null,
+            bearbStatus: BearbStatus.vernichtet,
+        },
+        {
+            inventarId: inventar.id,
+            typ: WareTyp.substanz,
+            primarschluessel: "S-0009-010",
+            lagerplatzCode: "VERNICHTET",
+            raum: null,
+            bezeichnung: "Alte Substanz - vernichtet",
+            temperatur: null,
+            expDatum: null,
+            bearbStatus: BearbStatus.vernichtet,
         },
     ];
 

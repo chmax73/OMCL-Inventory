@@ -10,7 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 // xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
-import { WareTyp } from "@prisma/client";
+import { WareTyp, BearbStatus } from "@prisma/client";
 
 // Typ für eine Zeile aus der Excel-Datei
 type ExcelRow = {
@@ -21,6 +21,7 @@ type ExcelRow = {
     bezeichnung?: string;
     temperatur?: string;
     expDatum?: Date;
+    bearbStatus: BearbStatus;
 };
 
 // Typ für das Ergebnis des Uploads
@@ -28,9 +29,23 @@ export type UploadResult = {
     success: boolean;
     imported?: number;
     skipped?: number;
+    skippedBestellt?: number;
+    vernichtet?: number;
     errors?: string[];
     error?: string;
 };
+
+// Erkennt den Bearbeitungsstatus aus dem Excel-Wert
+function detectBearbStatus(value: unknown): BearbStatus | "bestellt" | null {
+    if (!value) return null;
+    const str = String(value).toLowerCase().trim();
+    if (str.includes("vernichtet")) return BearbStatus.vernichtet;
+    if (str.includes("bestellt")) return "bestellt";
+    if (str.includes("freigabe")) return BearbStatus.freigabe;
+    if (str.includes("erfasst")) return BearbStatus.erfasst;
+    // Unbekannter Status → als erfasst behandeln
+    return BearbStatus.erfasst;
+}
 
 // Erkennt den Warentyp anhand des Primärschlüssels
 function detectWareTyp(primarschluessel: string): WareTyp {
@@ -167,19 +182,37 @@ export async function uploadExcel(
                 continue;
             }
 
-            if (!lagerplatzCode) {
+            // Bearbeitungsstatus finden (Spalte G: "Bearb.stat. Muster")
+            const bearbStatusKey = keys.find(k =>
+                k.toLowerCase().includes("bearb") ||
+                k.toLowerCase().includes("status") ||
+                k.toLowerCase().includes("stat")
+            );
+            const bearbStatusRaw = bearbStatusKey ? row[bearbStatusKey] : null;
+            const bearbStatus = detectBearbStatus(bearbStatusRaw);
+
+            // "bestellt" → komplett ignorieren (kein DB-Eintrag)
+            if (bearbStatus === "bestellt") {
+                continue;
+            }
+
+            // Vernichtete Waren brauchen keinen Lagerplatz
+            const isVernichtet = bearbStatus === BearbStatus.vernichtet;
+
+            if (!lagerplatzCode && !isVernichtet) {
                 errors.push(`Zeile ${lineNum}: Lagerplatz fehlt`);
                 continue;
             }
 
             rows.push({
                 primarschluessel: String(primarschluessel).trim(),
-                lagerplatzCode: String(lagerplatzCode).trim(),
+                lagerplatzCode: isVernichtet && !lagerplatzCode ? "VERNICHTET" : String(lagerplatzCode).trim(),
                 typ: detectWareTyp(String(primarschluessel)),
                 raum: raumKey && row[raumKey] ? String(row[raumKey]).trim() : undefined,
                 bezeichnung: bezeichnungKey && row[bezeichnungKey] ? String(row[bezeichnungKey]).trim() : undefined,
                 temperatur: temperaturKey && row[temperaturKey] ? String(row[temperaturKey]).trim() : undefined,
-                expDatum: undefined, // Ablaufdatum nicht benötigt
+                expDatum: undefined,
+                bearbStatus: bearbStatus ?? BearbStatus.erfasst,
             });
         }
 
@@ -207,8 +240,12 @@ export async function uploadExcel(
                 bezeichnung: row.bezeichnung,
                 temperatur: row.temperatur,
                 expDatum: row.expDatum,
+                bearbStatus: row.bearbStatus,
             })),
         });
+
+        const vernichtetCount = rows.filter(r => r.bearbStatus === BearbStatus.vernichtet).length;
+        const bestelltCount = rawData.length - rows.length - errors.length;
 
         // Cache invalidieren
         revalidatePath("/");
@@ -218,6 +255,8 @@ export async function uploadExcel(
             success: true,
             imported: rows.length,
             skipped: errors.length,
+            skippedBestellt: bestelltCount > 0 ? bestelltCount : undefined,
+            vernichtet: vernichtetCount > 0 ? vernichtetCount : undefined,
             errors: errors.length > 0 ? errors : undefined,
         };
     } catch (error) {

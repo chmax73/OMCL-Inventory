@@ -37,6 +37,13 @@ enum ScanTyp {
   neu    // Ware nicht im SOLL-Bestand (unbekannt)
 }
 
+// Bearbeitungsstatus aus dem LIMS-Export (Spalte "Bearb.stat. Muster")
+enum BearbStatus {
+  erfasst    // Ware ist im LIMS erfasst
+  freigabe   // Ware ist zur Prüfung freigegeben
+  vernichtet // Ware wurde vernichtet (nur Kontroll-Eintrag)
+}
+
 // Abweichungstyp: Art der festgestellten Differenz
 enum AbweichungTyp {
   fehlend // Ware im SOLL, aber nicht gescannt
@@ -96,6 +103,7 @@ model WareSoll {
   bezeichnung     String?
   temperatur      String?
   expDatum        DateTime? @map("exp_datum")
+  bearbStatus     BearbStatus @default(erfasst) @map("bearb_status")
 
   // Relationen
   inventar Inventar @relation(fields: [inventarId], references: [id], onDelete: Cascade)

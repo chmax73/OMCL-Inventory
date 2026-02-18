@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ScanTyp } from "@prisma/client";
+import { ScanTyp, BearbStatus } from "@prisma/client";
 
 // Typ für das aktive Inventar
 export type ActiveInventar = {
@@ -81,9 +81,12 @@ export async function getActiveInventar(): Promise<ActiveInventar | null> {
 
 // Alle Lagerplätze mit Statistik laden
 export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInfo[]> {
-    // Alle SOLL-Waren gruppiert nach Lagerplatz
+    // Alle SOLL-Waren gruppiert nach Lagerplatz (ohne vernichtete)
     const sollWaren = await prisma.wareSoll.findMany({
-        where: { inventarId },
+        where: {
+            inventarId,
+            bearbStatus: { not: BearbStatus.vernichtet },
+        },
         select: {
             lagerplatzCode: true,
             raum: true,
@@ -146,10 +149,12 @@ export async function getSollWarenForLagerplatz(
     inventarId: string,
     lagerplatzCode: string
 ): Promise<SollWare[]> {
+    // Nur nicht-vernichtete SOLL-Waren laden
     const sollWaren = await prisma.wareSoll.findMany({
         where: {
             inventarId,
             lagerplatzCode,
+            bearbStatus: { not: BearbStatus.vernichtet },
         },
         orderBy: { primarschluessel: "asc" },
     });
@@ -253,6 +258,24 @@ export async function scanBarcode(
         let message: string;
 
         if (!sollWare) {
+            // Prüfen ob Barcode als "vernichtet" im SOLL-Bestand existiert (anderer Lagerplatz)
+            const vernichtetWare = await prisma.wareSoll.findFirst({
+                where: {
+                    inventarId,
+                    primarschluessel: barcode,
+                    bearbStatus: BearbStatus.vernichtet,
+                },
+            });
+
+            if (vernichtetWare) {
+                // Vernichtet in LIMS → nur Meldung, KEINE Abweichung, KEIN IST-Eintrag
+                return {
+                    success: true,
+                    scanTyp: ScanTyp.neu,
+                    message: "⚠️ Vernichtet in LIMS – kein Scan nötig",
+                };
+            }
+
             // Nicht im SOLL = NEU (unerwartet gefunden)
             scanTyp = ScanTyp.neu;
             message = "Ware nicht im SOLL-Bestand - als NEU erfasst";
@@ -265,6 +288,13 @@ export async function scanBarcode(
                     typ: "neu",
                 },
             });
+        } else if (sollWare.bearbStatus === BearbStatus.vernichtet) {
+            // Vernichtete Ware am aktuellen Lagerplatz gescannt → nur Info
+            return {
+                success: true,
+                scanTyp: ScanTyp.neu,
+                message: "⚠️ Vernichtet in LIMS – kein Scan nötig",
+            };
         } else if (sollWare.lagerplatzCode !== lagerplatzCode) {
             // Falscher Lagerplatz
             scanTyp = ScanTyp.falsch;
@@ -328,9 +358,13 @@ export async function confirmLagerplatz(
             return { success: false, error: "Lagerplatz wurde bereits als überprüft markiert" };
         }
 
-        // SOLL-Waren für diesen Lagerplatz laden
+        // SOLL-Waren für diesen Lagerplatz laden (ohne vernichtete)
         const sollWaren = await prisma.wareSoll.findMany({
-            where: { inventarId, lagerplatzCode },
+            where: {
+                inventarId,
+                lagerplatzCode,
+                bearbStatus: { not: BearbStatus.vernichtet },
+            },
             select: { primarschluessel: true },
         });
 
