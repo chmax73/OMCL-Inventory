@@ -184,8 +184,8 @@ export default function UploadPage() {
                         onDragOver={(e) => e.preventDefault()}
                         onClick={() => fileInputRef.current?.click()}
                         className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${file
-                                ? "border-success bg-success/10"
-                                : "border-base-300 hover:border-primary hover:bg-base-100"
+                            ? "border-success bg-success/10"
+                            : "border-base-300 hover:border-primary hover:bg-base-100"
                             }`}
                     >
                         <input
@@ -240,11 +240,16 @@ export default function UploadPage() {
                                         <p className="font-medium">Import erfolgreich!</p>
                                         <p className="text-sm">
                                             {result.imported} Waren importiert
-                                            {result.skipped && result.skipped > 0 && `, ${result.skipped} übersprungen`}
+                                            {result.skippedBestellt && `, ${result.skippedBestellt} bestellt (ignoriert)`}
+                                            {result.vernichtet && `, ${result.vernichtet} vernichtet`}
+                                            {result.skipped && result.skipped > 0 && `, ${result.skipped} Fehler`}
                                         </p>
                                     </>
                                 ) : (
                                     <p>{result.error}</p>
+                                )}
+                                {result.debug && (
+                                    <p className="text-xs opacity-60 mt-1 break-all">{result.debug}</p>
                                 )}
                             </div>
                         </div>

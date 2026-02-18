@@ -33,6 +33,7 @@ export type UploadResult = {
     vernichtet?: number;
     errors?: string[];
     error?: string;
+    debug?: string;
 };
 
 // Erkennt den Bearbeitungsstatus aus dem Excel-Wert
@@ -126,9 +127,18 @@ export async function uploadExcel(
             return { success: false, error: "Die Excel-Datei enthält keine Daten" };
         }
 
+        // Debug: Spaltennamen der ersten Zeile loggen
+        const firstRowKeys = Object.keys(rawData[0]);
+        console.log("[UPLOAD DEBUG] Anzahl Zeilen:", rawData.length);
+        console.log("[UPLOAD DEBUG] Spalten:", firstRowKeys);
+        console.log("[UPLOAD DEBUG] Erste Zeile:", JSON.stringify(rawData[0]));
+
         // Daten verarbeiten
         const rows: ExcelRow[] = [];
         const errors: string[] = [];
+        let skippedBestellt = 0;
+        let skippedNoPK = 0;
+        let skippedNoLP = 0;
 
         for (let i = 0; i < rawData.length; i++) {
             const row = rawData[i];
@@ -178,7 +188,8 @@ export async function uploadExcel(
             );
 
             if (!primarschluessel) {
-                errors.push(`Zeile ${lineNum}: Primärschlüssel fehlt`);
+                skippedNoPK++;
+                if (skippedNoPK <= 3) errors.push(`Zeile ${lineNum}: Primärschlüssel fehlt`);
                 continue;
             }
 
@@ -193,6 +204,7 @@ export async function uploadExcel(
 
             // "bestellt" → komplett ignorieren (kein DB-Eintrag)
             if (bearbStatus === "bestellt") {
+                skippedBestellt++;
                 continue;
             }
 
@@ -200,7 +212,8 @@ export async function uploadExcel(
             const isVernichtet = bearbStatus === BearbStatus.vernichtet;
 
             if (!lagerplatzCode && !isVernichtet) {
-                errors.push(`Zeile ${lineNum}: Lagerplatz fehlt`);
+                skippedNoLP++;
+                if (skippedNoLP <= 3) errors.push(`Zeile ${lineNum}: Lagerplatz fehlt`);
                 continue;
             }
 
@@ -216,11 +229,16 @@ export async function uploadExcel(
             });
         }
 
+        // Debug-Info zusammenstellen
+        const debugInfo = `Spalten: ${firstRowKeys.join(", ")} | Total: ${rawData.length} | Bestellt: ${skippedBestellt} | Ohne PK: ${skippedNoPK} | Ohne LP: ${skippedNoLP} | Gültig: ${rows.length}`;
+        console.log("[UPLOAD DEBUG]", debugInfo);
+
         if (rows.length === 0) {
             return {
                 success: false,
                 error: "Keine gültigen Zeilen gefunden",
-                errors
+                errors,
+                debug: debugInfo,
             };
         }
 
@@ -249,7 +267,6 @@ export async function uploadExcel(
         }
 
         const vernichtetCount = rows.filter(r => r.bearbStatus === BearbStatus.vernichtet).length;
-        const bestelltCount = rawData.length - rows.length - errors.length;
 
         // Cache invalidieren
         revalidatePath("/");
@@ -259,9 +276,10 @@ export async function uploadExcel(
             success: true,
             imported: rows.length,
             skipped: errors.length,
-            skippedBestellt: bestelltCount > 0 ? bestelltCount : undefined,
+            skippedBestellt: skippedBestellt > 0 ? skippedBestellt : undefined,
             vernichtet: vernichtetCount > 0 ? vernichtetCount : undefined,
             errors: errors.length > 0 ? errors : undefined,
+            debug: debugInfo,
         };
     } catch (error) {
         console.error("Fehler beim Excel-Upload:", error);
