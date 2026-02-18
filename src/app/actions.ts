@@ -8,6 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 // Typ für Dashboard-Statistiken
 export type DashboardStats = {
@@ -69,9 +70,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     };
 }
 
-// Aktuelle Inventare laden
+// Aktuelle Inventare laden (nicht archivierte)
 export async function getInventarList(): Promise<InventarListItem[]> {
     const inventare = await prisma.inventar.findMany({
+        where: { archiviert: false },
         include: {
             erstelltVon: {
                 select: { name: true },
@@ -84,7 +86,7 @@ export async function getInventarList(): Promise<InventarListItem[]> {
             },
         },
         orderBy: { erstelltAm: "desc" },
-        take: 10, // Nur die letzten 10
+        take: 10,
     });
 
     return inventare.map((inv) => ({
@@ -96,4 +98,52 @@ export async function getInventarList(): Promise<InventarListItem[]> {
         sollWaren: inv._count.sollWaren,
         istScans: inv._count.istWaren,
     }));
+}
+
+// Archivierte Inventare laden
+export async function getArchivedInventarList(): Promise<InventarListItem[]> {
+    const inventare = await prisma.inventar.findMany({
+        where: { archiviert: true },
+        include: {
+            erstelltVon: {
+                select: { name: true },
+            },
+            _count: {
+                select: {
+                    sollWaren: true,
+                    istWaren: true,
+                },
+            },
+        },
+        orderBy: { erstelltAm: "desc" },
+    });
+
+    return inventare.map((inv) => ({
+        id: inv.id,
+        erstelltAm: inv.erstelltAm,
+        erstelltVon: inv.erstelltVon.name,
+        abgeschlossen: inv.abgeschlossen,
+        abgeschlossenAm: inv.abgeschlossenAm,
+        sollWaren: inv._count.sollWaren,
+        istScans: inv._count.istWaren,
+    }));
+}
+
+// Inventar archivieren
+export async function archiveInventar(inventarId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        await prisma.inventar.update({
+            where: { id: inventarId },
+            data: {
+                archiviert: true,
+                archiviertAm: new Date(),
+            },
+        });
+        revalidatePath("/");
+        revalidatePath("/archiv");
+        return { success: true };
+    } catch (error) {
+        console.error("Fehler beim Archivieren:", error);
+        return { success: false, error: "Inventar konnte nicht archiviert werden" };
+    }
 }

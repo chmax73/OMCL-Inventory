@@ -80,6 +80,8 @@ model Inventar {
   erstelltVonId String @map("erstellt_von")
   abgeschlossen Boolean @default(false)
   abgeschlossenAm DateTime? @map("abgeschlossen_am")
+  archiviert    Boolean  @default(false)
+  archiviertAm  DateTime? @map("archiviert_am")
 
   // Relationen
   erstelltVon User         @relation("ErstelltVon", fields: [erstelltVonId], references: [id])

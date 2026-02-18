@@ -11,8 +11,9 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText, ListChecks } from "lucide-react";
+import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText, ListChecks, Archive } from "lucide-react";
 import { getDashboardStats, getInventarList } from "./actions";
+import ArchiveButton from "@/components/ArchiveButton";
 
 export default async function Dashboard() {
   // Daten parallel aus der Datenbank laden
@@ -26,10 +27,16 @@ export default async function Dashboard() {
       {/* Seitentitel */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <Link href="/inventar/neu" className="btn btn-primary">
-          <ClipboardPlus className="w-5 h-5" />
-          Neues Inventar
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/archiv" className="btn btn-ghost gap-1">
+            <Archive className="w-5 h-5" />
+            Archiv
+          </Link>
+          <Link href="/inventar/neu" className="btn btn-primary">
+            <ClipboardPlus className="w-5 h-5" />
+            Neues Inventar
+          </Link>
+        </div>
       </div>
 
       {/* Statistik-Cards */}
@@ -134,6 +141,7 @@ export default async function Dashboard() {
                                 <ListChecks className="w-3 h-3" />
                                 Abweichungen
                               </Link>
+                              <ArchiveButton inventarId={inv.id} />
                             </>
                           ) : (
                             <>
