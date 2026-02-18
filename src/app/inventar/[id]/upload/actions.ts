@@ -12,6 +12,9 @@ import { revalidatePath } from "next/cache";
 // xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
 import { WareTyp, BearbStatus } from "@prisma/client";
 
+// Maximale Ausführungszeit für Serverless Function (60s = Vercel Free Tier Max)
+export const maxDuration = 60;
+
 // Typ für eine Zeile aus der Excel-Datei
 type ExcelRow = {
     primarschluessel: string;
@@ -229,20 +232,24 @@ export async function uploadExcel(
             where: { inventarId },
         });
 
-        // Neue SOLL-Waren einfügen
-        await prisma.wareSoll.createMany({
-            data: rows.map((row) => ({
-                inventarId,
-                primarschluessel: row.primarschluessel,
-                lagerplatzCode: row.lagerplatzCode,
-                typ: row.typ,
-                raum: row.raum,
-                bezeichnung: row.bezeichnung,
-                temperatur: row.temperatur,
-                expDatum: row.expDatum,
-                bearbStatus: row.bearbStatus,
-            })),
-        });
+        // Neue SOLL-Waren in Batches einfügen (1000 pro Batch für Performance)
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+            const batch = rows.slice(i, i + BATCH_SIZE);
+            await prisma.wareSoll.createMany({
+                data: batch.map((row) => ({
+                    inventarId,
+                    primarschluessel: row.primarschluessel,
+                    lagerplatzCode: row.lagerplatzCode,
+                    typ: row.typ,
+                    raum: row.raum,
+                    bezeichnung: row.bezeichnung,
+                    temperatur: row.temperatur,
+                    expDatum: row.expDatum,
+                    bearbStatus: row.bearbStatus,
+                })),
+            });
+        }
 
         const vernichtetCount = rows.filter(r => r.bearbStatus === BearbStatus.vernichtet).length;
         const bestelltCount = rawData.length - rows.length - errors.length;
