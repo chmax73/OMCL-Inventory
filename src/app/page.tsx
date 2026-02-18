@@ -11,7 +11,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText } from "lucide-react";
+import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText, ListChecks } from "lucide-react";
 import { getDashboardStats, getInventarList } from "./actions";
 
 export default async function Dashboard() {
@@ -125,14 +125,24 @@ export default async function Dashboard() {
                         </td>
                         <td className="flex gap-2">
                           {inv.abgeschlossen ? (
-                            <Link href={`/inventar/${inv.id}/report`} className="btn btn-sm btn-primary gap-1">
-                              <FileText className="w-3 h-3" />
-                              Report
-                            </Link>
+                            <>
+                              <Link href={`/inventar/${inv.id}/report`} className="btn btn-sm btn-primary gap-1">
+                                <FileText className="w-3 h-3" />
+                                Report
+                              </Link>
+                              <Link href={`/inventar/${inv.id}/abweichungen`} className="btn btn-sm btn-warning gap-1">
+                                <ListChecks className="w-3 h-3" />
+                                Abweichungen
+                              </Link>
+                            </>
                           ) : (
                             <>
                               <Link href="/scan" className="btn btn-sm btn-primary">
                                 Weiter scannen
+                              </Link>
+                              <Link href={`/inventar/${inv.id}/abweichungen`} className="btn btn-sm btn-warning gap-1">
+                                <ListChecks className="w-3 h-3" />
+                                Abweichungen
                               </Link>
                               <Link href={`/inventar/${inv.id}/abschliessen`} className="btn btn-sm btn-success gap-1">
                                 <Lock className="w-3 h-3" />
