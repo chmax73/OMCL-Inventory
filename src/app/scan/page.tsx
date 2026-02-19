@@ -273,10 +273,25 @@ export default function ScanPage() {
                                 {/* Buttons */}
                                 <div className="mt-3 flex gap-2">
                                     {lp.ueberprueft ? (
-                                        <span className="text-sm text-success font-semibold flex items-center gap-1">
-                                            <CheckCircle className="w-4 h-4" />
-                                            Abgeschlossen
-                                        </span>
+                                        <>
+                                            <span className="text-sm text-success font-semibold flex items-center gap-1">
+                                                <CheckCircle className="w-4 h-4" />
+                                                Abgeschlossen
+                                            </span>
+                                            <button
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (!inventar || !user) return;
+                                                    if (!confirm(`Lagerplatz ${lp.code} wiedereröffnen?`)) return;
+                                                    await reopenLagerplatz(inventar.id, lp.code, user.id);
+                                                    const plaetze = await getLagerplaetze(inventar.id);
+                                                    setLagerplaetze(plaetze);
+                                                }}
+                                                className="btn btn-sm btn-ghost btn-xs text-warning"
+                                            >
+                                                Wiedereröffnen
+                                            </button>
+                                        </>
                                     ) : (
                                         <button
                                             onClick={() => setSelectedLagerplatz(lp.code)}
