@@ -296,19 +296,10 @@ export async function scanBarcode(
                 message: "⚠️ Vernichtet in LIMS – kein Scan nötig",
             };
         } else if (sollWare.lagerplatzCode !== lagerplatzCode) {
-            // Falscher Lagerplatz
+            // Falscher Lagerplatz – Meldung anzeigen, aber KEINE Abweichung erstellen
+            // (Mitarbeiter korrigiert den Standort sofort manuell)
             scanTyp = ScanTyp.falsch;
             message = `Ware am falschen Ort - erwartet: ${sollWare.lagerplatzCode}`;
-
-            // Abweichung erstellen
-            await prisma.abweichung.create({
-                data: {
-                    inventarId,
-                    primarschluessel: barcode,
-                    typ: "falsch",
-                    kommentar: `Erwartet: ${sollWare.lagerplatzCode}, Gefunden: ${lagerplatzCode}`,
-                },
-            });
         } else {
             // Alles OK
             scanTyp = ScanTyp.ok;
