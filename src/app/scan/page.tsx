@@ -34,6 +34,28 @@ import {
     type ScanResult,
 } from "./actions";
 
+// Fehler-Ton abspielen: zwei kurze tiefe Pieptöne (Web Audio API)
+function playErrorBeep() {
+    try {
+        const ctx = new AudioContext();
+        const playTone = (startTime: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "square";
+            osc.frequency.value = 300; // tiefer Ton = Fehler
+            gain.gain.value = 0.3;
+            osc.start(startTime);
+            osc.stop(startTime + 0.15);
+        };
+        playTone(ctx.currentTime);
+        playTone(ctx.currentTime + 0.25);
+    } catch {
+        // Audio nicht verfügbar – ignorieren
+    }
+}
+
 export default function ScanPage() {
     const router = useRouter();
     const { user } = useUser();
@@ -92,12 +114,19 @@ export default function ScanPage() {
         setLastScanResult(result);
 
         if (result.success) {
+            // Fehler-Ton bei Problemen (vernichtet, neu, falsch)
+            if (result.scanTyp && result.scanTyp !== "ok") {
+                playErrorBeep();
+            }
             // SOLL-Waren aktualisieren
             const waren = await getSollWarenForLagerplatz(inventar.id, selectedLagerplatz);
             setSollWaren(waren);
             // Lagerplätze aktualisieren
             const plaetze = await getLagerplaetze(inventar.id);
             setLagerplaetze(plaetze);
+        } else {
+            // Fehler-Ton bei fehlgeschlagenem Scan
+            playErrorBeep();
         }
 
         setBarcode("");
