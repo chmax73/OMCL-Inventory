@@ -317,6 +317,18 @@ export async function scanBarcode(
             },
         });
 
+        // Falls eine "fehlend"-Abweichung für dieses Produkt existiert → entfernen
+        // (z.B. nach Wiedereröffnung eines Lagerplatzes und erneutem Scan)
+        if (scanTyp === ScanTyp.ok || scanTyp === ScanTyp.falsch) {
+            await prisma.abweichung.deleteMany({
+                where: {
+                    inventarId,
+                    primarschluessel: barcode,
+                    typ: "fehlend",
+                },
+            });
+        }
+
         // Cache invalidieren
         revalidatePath("/scan");
         revalidatePath("/");
