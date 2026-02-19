@@ -127,7 +127,10 @@ export default function ScanPage() {
             setIsUeberprueft(true);
             setFehlendeWarenCount(result.fehlendeWaren || 0);
             // Zurück zur Lagerplatz-Auswahl nach längerem Timeout wenn Abweichungen
-            setTimeout(() => {
+            setTimeout(async () => {
+                // Lagerplätze neu laden damit Status sofort aktualisiert wird
+                const plaetze = await getLagerplaetze(inventar.id);
+                setLagerplaetze(plaetze);
                 setSelectedLagerplatz(null);
                 setIsUeberprueft(false);
                 setFehlendeWarenCount(null);
