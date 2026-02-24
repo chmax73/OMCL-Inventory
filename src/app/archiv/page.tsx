@@ -9,7 +9,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Archive, FileText, ListChecks, ArrowLeft, CheckCircle } from "lucide-react";
+import { Archive, FileText, ListChecks, ArrowLeft, CheckCircle, Package, FlaskConical } from "lucide-react";
 import { getArchivedInventarList } from "@/app/actions";
 
 export default async function ArchivPage() {
@@ -38,6 +38,7 @@ export default async function ArchivPage() {
                             <table className="table">
                                 <thead>
                                     <tr>
+                                        <th>Typ</th>
                                         <th>Status</th>
                                         <th>Erstellt am</th>
                                         <th>Erstellt von</th>
@@ -48,6 +49,19 @@ export default async function ArchivPage() {
                                 <tbody>
                                     {inventare.map((inv) => (
                                         <tr key={inv.id}>
+                                            <td>
+                                                {inv.typ === "MUSTER" ? (
+                                                    <span className="badge badge-primary gap-1">
+                                                        <Package className="w-3 h-3" />
+                                                        Muster
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge badge-secondary gap-1">
+                                                        <FlaskConical className="w-3 h-3" />
+                                                        Substanzen
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span className="badge badge-success gap-1">
                                                     <CheckCircle className="w-3 h-3" />
