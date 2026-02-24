@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { InventarTyp } from "@prisma/client";
 
 // Typ für Dashboard-Statistiken
 export type DashboardStats = {
@@ -21,6 +22,7 @@ export type DashboardStats = {
 // Typ für Inventar in der Liste
 export type InventarListItem = {
     id: string;
+    typ: InventarTyp;
     erstelltAm: Date;
     erstelltVon: string;
     abgeschlossen: boolean;
@@ -70,10 +72,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     };
 }
 
-// Aktuelle Inventare laden (nicht archivierte)
-export async function getInventarList(): Promise<InventarListItem[]> {
+// Aktuelle Inventare laden (nicht archivierte), optional nach Typ filtern
+export async function getInventarList(typ?: InventarTyp): Promise<InventarListItem[]> {
     const inventare = await prisma.inventar.findMany({
-        where: { archiviert: false },
+        where: { archiviert: false, ...(typ ? { typ } : {}) },
         include: {
             erstelltVon: {
                 select: { name: true },
@@ -91,6 +93,7 @@ export async function getInventarList(): Promise<InventarListItem[]> {
 
     return inventare.map((inv) => ({
         id: inv.id,
+        typ: inv.typ,
         erstelltAm: inv.erstelltAm,
         erstelltVon: inv.erstelltVon.name,
         abgeschlossen: inv.abgeschlossen,
@@ -120,6 +123,7 @@ export async function getArchivedInventarList(): Promise<InventarListItem[]> {
 
     return inventare.map((inv) => ({
         id: inv.id,
+        typ: inv.typ,
         erstelltAm: inv.erstelltAm,
         erstelltVon: inv.erstelltVon.name,
         abgeschlossen: inv.abgeschlossen,

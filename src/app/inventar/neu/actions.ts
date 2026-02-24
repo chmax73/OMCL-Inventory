@@ -8,6 +8,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { InventarTyp } from "@prisma/client";
 
 // Typ für das Ergebnis der Inventar-Erstellung
 export type CreateInventarResult = {
@@ -16,8 +17,8 @@ export type CreateInventarResult = {
     error?: string;
 };
 
-// Neues Inventar erstellen
-export async function createInventar(userId: string): Promise<CreateInventarResult> {
+// Neues Inventar erstellen (Muster oder Substanzen)
+export async function createInventar(userId: string, typ: InventarTyp = InventarTyp.MUSTER): Promise<CreateInventarResult> {
     try {
         // Prüfen ob User existiert
         const user = await prisma.user.findUnique({
@@ -28,15 +29,16 @@ export async function createInventar(userId: string): Promise<CreateInventarResu
             return { success: false, error: "Benutzer nicht gefunden" };
         }
 
-        // Prüfen ob bereits ein offenes Inventar existiert
+        // Prüfen ob bereits ein offenes Inventar dieses Typs existiert
         const openInventar = await prisma.inventar.findFirst({
-            where: { abgeschlossen: false },
+            where: { abgeschlossen: false, typ },
         });
 
+        const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "Substanzen";
         if (openInventar) {
             return {
                 success: false,
-                error: "Es existiert bereits ein offenes Inventar. Bitte schliesse dieses zuerst ab."
+                error: `Es existiert bereits ein offenes ${typLabel}-Inventar. Bitte schliesse dieses zuerst ab.`
             };
         }
 
@@ -44,6 +46,7 @@ export async function createInventar(userId: string): Promise<CreateInventarResu
         const inventar = await prisma.inventar.create({
             data: {
                 erstelltVonId: userId,
+                typ,
             },
         });
 
@@ -55,7 +58,7 @@ export async function createInventar(userId: string): Promise<CreateInventarResu
                 entitaet: "inventar",
                 referenzId: inventar.id,
                 inventarId: inventar.id,
-                details: JSON.stringify({ erstelltVon: user.name }),
+                details: JSON.stringify({ erstelltVon: user.name, typ }),
             },
         });
 
