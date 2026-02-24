@@ -9,11 +9,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ScanTyp, BearbStatus } from "@prisma/client";
+import { ScanTyp, BearbStatus, InventarTyp } from "@prisma/client";
 
 // Typ für das aktive Inventar
 export type ActiveInventar = {
     id: string;
+    typ: InventarTyp;
     erstelltAm: Date;
     sollWarenCount: number;
     istWarenCount: number;
@@ -48,18 +49,17 @@ export type ScanResult = {
     error?: string;
 };
 
-// Aktives (offenes) Inventar laden
-export async function getActiveInventar(): Promise<ActiveInventar | null> {
-    const inventar = await prisma.inventar.findFirst({
-        where: { abgeschlossen: false },
-        include: {
-            _count: {
-                select: {
-                    sollWaren: true,
-                },
-            },
-        },
-    });
+// Inventar laden (per ID oder erstes offenes)
+export async function getActiveInventar(inventarId?: string): Promise<ActiveInventar | null> {
+    const inventar = inventarId
+        ? await prisma.inventar.findUnique({
+            where: { id: inventarId },
+            include: { _count: { select: { sollWaren: true } } },
+        })
+        : await prisma.inventar.findFirst({
+            where: { abgeschlossen: false },
+            include: { _count: { select: { sollWaren: true } } },
+        });
 
     if (!inventar) return null;
 
@@ -73,6 +73,7 @@ export async function getActiveInventar(): Promise<ActiveInventar | null> {
 
     return {
         id: inventar.id,
+        typ: inventar.typ,
         erstelltAm: inventar.erstelltAm,
         sollWarenCount: inventar._count.sollWaren,
         istWarenCount: okScansCount,
@@ -205,14 +206,14 @@ export async function getSollWarenForLagerplatz(
     return result;
 }
 
-// Barcode-Format validieren (M-XXXXXX für Muster, S-XXXX-XXX für Substanzen)
-function isValidBarcode(barcode: string): boolean {
+// Barcode-Format validieren, abhängig vom Inventar-Typ
+function isValidBarcode(barcode: string, inventarTyp: InventarTyp): boolean {
+    if (inventarTyp === InventarTyp.SUBSTANZEN) {
+        // Substanz-Format: S-xxxx oder S-xxxx-xxx (x = Ziffer)
+        return /^S-\d{4}(-\d{3})?$/i.test(barcode);
+    }
     // Muster-Format: M- gefolgt von 6 Ziffern (z.B. M-022272)
-    const musterPattern = /^M-\d{6}$/i;
-    // Substanz-Format: S- gefolgt von 4 Ziffern, Bindestrich, 3 Ziffern (z.B. S-0009-001)
-    const substanzPattern = /^S-\d{4}-\d{3}$/i;
-
-    return musterPattern.test(barcode) || substanzPattern.test(barcode);
+    return /^M-\d{6}$/i.test(barcode);
 }
 
 // Barcode scannen und IST-Eintrag erstellen
@@ -223,11 +224,18 @@ export async function scanBarcode(
     userId: string
 ): Promise<ScanResult> {
     try {
-        // Barcode-Format validieren
-        if (!isValidBarcode(barcode)) {
+        // Inventar-Typ laden für Barcode-Validierung
+        const inventar = await prisma.inventar.findUnique({ where: { id: inventarId }, select: { typ: true } });
+        if (!inventar) return { success: false, error: "Inventar nicht gefunden" };
+
+        // Barcode-Format validieren (typ-abhängig)
+        if (!isValidBarcode(barcode, inventar.typ)) {
+            const erwartet = inventar.typ === InventarTyp.SUBSTANZEN
+                ? "S-XXXX oder S-XXXX-XXX"
+                : "M-XXXXXX";
             return {
                 success: false,
-                error: `Ungültiges Barcode-Format: "${barcode}". Erwartet: M-XXXXXX oder S-XXXX-XXX`,
+                error: `Ungültiges Barcode-Format: "${barcode}". Erwartet: ${erwartet}`,
             };
         }
 
@@ -268,11 +276,12 @@ export async function scanBarcode(
             });
 
             if (vernichtetWare) {
-                // Vernichtet in LIMS → nur Meldung, KEINE Abweichung, KEIN IST-Eintrag
+                // Vernichtet/Eliminiert → nur Meldung, KEINE Abweichung, KEIN IST-Eintrag
+                const vernichtetLabel = inventar.typ === InventarTyp.SUBSTANZEN ? "Eliminiert" : "Vernichtet in LIMS";
                 return {
                     success: true,
                     scanTyp: ScanTyp.neu,
-                    message: "⚠️ Vernichtet in LIMS – kein Scan nötig",
+                    message: `⚠️ ${vernichtetLabel} – kein Scan nötig`,
                 };
             }
 
@@ -289,11 +298,12 @@ export async function scanBarcode(
                 },
             });
         } else if (sollWare.bearbStatus === BearbStatus.vernichtet) {
-            // Vernichtete Ware am aktuellen Lagerplatz gescannt → nur Info
+            // Vernichtete/Eliminierte Ware am aktuellen Lagerplatz gescannt → nur Info
+            const vernichtetLabel = inventar.typ === InventarTyp.SUBSTANZEN ? "Eliminiert" : "Vernichtet in LIMS";
             return {
                 success: true,
                 scanTyp: ScanTyp.neu,
-                message: "⚠️ Vernichtet in LIMS – kein Scan nötig",
+                message: `⚠️ ${vernichtetLabel} – kein Scan nötig`,
             };
         } else if (sollWare.lagerplatzCode !== lagerplatzCode) {
             // Falscher Lagerplatz – Meldung anzeigen, aber KEINE Abweichung erstellen

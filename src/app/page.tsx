@@ -91,7 +91,7 @@ function InventarTabelle({ inventare, neuLink, label }: {
                     </>
                   ) : (
                     <>
-                      <Link href="/scan" className="btn btn-sm btn-primary">
+                      <Link href={`/scan?inventarId=${inv.id}`} className="btn btn-sm btn-primary">
                         Weiter scannen
                       </Link>
                       <Link href={`/inventar/${inv.id}/abweichungen`} className="btn btn-sm btn-warning gap-1">

@@ -8,7 +8,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
     ScanBarcode,
     MapPin,
@@ -58,8 +58,10 @@ function playErrorBeep() {
 
 export default function ScanPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const barcodeInputRef = useRef<HTMLInputElement>(null);
+    const inventarIdParam = searchParams.get("inventarId") || undefined;
 
     const [inventar, setInventar] = useState<ActiveInventar | null>(null);
     const [lagerplaetze, setLagerplaetze] = useState<LagerplatzInfo[]>([]);
@@ -76,7 +78,7 @@ export default function ScanPage() {
     // Daten laden
     useEffect(() => {
         async function loadData() {
-            const activeInventar = await getActiveInventar();
+            const activeInventar = await getActiveInventar(inventarIdParam);
             setInventar(activeInventar);
 
             if (activeInventar) {
