@@ -193,20 +193,20 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {/* Substanzen-Inventare */}
+      {/* RM & Substanzen-Inventare */}
       <div className="card bg-base-200 shadow-sm">
         <div className="card-body">
           <div className="flex items-center justify-between">
             <h2 className="card-title gap-2">
               <FlaskConical className="w-5 h-5 text-secondary" />
-              Substanzen-Inventare
+              RM & Substanzen-Inventare
             </h2>
             <Link href="/inventar/neu?typ=SUBSTANZEN" className="btn btn-sm btn-secondary gap-1">
               <ClipboardPlus className="w-4 h-4" />
-              Neues Substanzen-Inventar
+              Neues RM & Substanzen-Inventar
             </Link>
           </div>
-          <InventarTabelle inventare={substanzenInventare} neuLink="/inventar/neu?typ=SUBSTANZEN" label="Substanzen" />
+          <InventarTabelle inventare={substanzenInventare} neuLink="/inventar/neu?typ=SUBSTANZEN" label="RM & Substanzen" />
         </div>
       </div>
     </div>

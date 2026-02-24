@@ -25,7 +25,7 @@ export default function NeuesInventarPage() {
     // Typ aus URL-Parameter lesen (Standard: MUSTER)
     const typParam = searchParams.get("typ");
     const typ = typParam === "SUBSTANZEN" ? InventarTyp.SUBSTANZEN : InventarTyp.MUSTER;
-    const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "Substanzen";
+    const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "RM & Substanzen";
     const TypIcon = typ === InventarTyp.MUSTER ? Package : FlaskConical;
 
     const handleCreateInventar = async () => {
@@ -132,7 +132,7 @@ export default function NeuesInventarPage() {
                         <div>
                             <p className="font-medium">Hinweis</p>
                             <p className="text-sm">
-                                Es kann pro Typ (Muster/Substanzen) immer nur ein offenes Inventar gleichzeitig existieren.
+                                Es kann pro Typ (Muster / RM & Substanzen) immer nur ein offenes Inventar gleichzeitig existieren.
                                 Du brauchst eine Excel-Datei mit den SOLL-Daten aus dem LIMS.
                             </p>
                         </div>

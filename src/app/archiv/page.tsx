@@ -58,7 +58,7 @@ export default async function ArchivPage() {
                                                 ) : (
                                                     <span className="badge badge-secondary gap-1">
                                                         <FlaskConical className="w-3 h-3" />
-                                                        Substanzen
+                                                        RM & Substanzen
                                                     </span>
                                                 )}
                                             </td>

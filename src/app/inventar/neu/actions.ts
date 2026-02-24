@@ -34,7 +34,7 @@ export async function createInventar(userId: string, typ: InventarTyp = Inventar
             where: { abgeschlossen: false, typ },
         });
 
-        const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "Substanzen";
+        const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "RM & Substanzen";
         if (openInventar) {
             return {
                 success: false,
