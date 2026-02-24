@@ -24,6 +24,12 @@ enum UserRole {
   user           // Kann nur scannen und Abweichungen melden
 }
 
+// Inventartyp: Unterscheidet Muster- und Substanzen-Inventare
+enum InventarTyp {
+  MUSTER     // Muster-Inventar (Barcode-Präfix: M-)
+  SUBSTANZEN // Substanzen-Inventar (Barcode-Präfix: S-)
+}
+
 // Warentyp: Unterscheidet zwischen Mustern und Substanzen
 enum WareTyp {
   muster   // Physische Muster (Barcode-Präfix: M-)
@@ -78,6 +84,7 @@ model Inventar {
   id         String    @id @default(uuid())
   erstelltAm DateTime  @default(now()) @map("erstellt_am")
   erstelltVonId String @map("erstellt_von")
+  typ           InventarTyp @default(MUSTER) @map("typ")
   abgeschlossen Boolean @default(false)
   abgeschlossenAm DateTime? @map("abgeschlossen_am")
   archiviert    Boolean  @default(false)

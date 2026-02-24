@@ -5,7 +5,7 @@
  * Es wird mit `npx prisma db seed` ausgeführt.
  */
 
-import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp, BearbStatus } from "@prisma/client";
+import { PrismaClient, UserRole, WareTyp, ScanTyp, AbweichungTyp, BearbStatus, InventarTyp } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { config } from "dotenv";
@@ -60,18 +60,28 @@ async function main() {
     console.log(`   ✓ ${normalUser.name} (User)`);
 
     // -------------------------------------------------------------------------
-    // 2. Inventar erstellen
+    // 2. Inventare erstellen (Muster + Substanzen)
     // -------------------------------------------------------------------------
-    console.log("📋 Erstelle Inventar...");
+    console.log("📋 Erstelle Inventare...");
 
-    const inventar = await prisma.inventar.create({
+    const inventarMuster = await prisma.inventar.create({
         data: {
             erstelltVonId: verantwortlicherUser.id,
+            typ: InventarTyp.MUSTER,
             abgeschlossen: false,
         },
     });
 
-    console.log(`   ✓ Inventar erstellt (ID: ${inventar.id.substring(0, 8)}...)`);
+    const inventarSubstanzen = await prisma.inventar.create({
+        data: {
+            erstelltVonId: verantwortlicherUser.id,
+            typ: InventarTyp.SUBSTANZEN,
+            abgeschlossen: false,
+        },
+    });
+
+    console.log(`   ✓ Muster-Inventar erstellt (ID: ${inventarMuster.id.substring(0, 8)}...)`);
+    console.log(`   ✓ Substanzen-Inventar erstellt (ID: ${inventarSubstanzen.id.substring(0, 8)}...)`);
 
     // -------------------------------------------------------------------------
     // 3. SOLL-Waren (aus LIMS-Export)
@@ -79,9 +89,9 @@ async function main() {
     console.log("📦 Erstelle SOLL-Waren...");
 
     const sollWaren = [
-        // Muster
+        // === MUSTER (gehören zum Muster-Inventar) ===
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             typ: WareTyp.muster,
             primarschluessel: "M-022272",
             lagerplatzCode: "0001",
@@ -91,7 +101,7 @@ async function main() {
             expDatum: new Date("2025-06-30"),
         },
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             typ: WareTyp.muster,
             primarschluessel: "M-022273",
             lagerplatzCode: "0001",
@@ -101,7 +111,7 @@ async function main() {
             expDatum: new Date("2025-08-15"),
         },
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             typ: WareTyp.muster,
             primarschluessel: "M-022274",
             lagerplatzCode: "0002",
@@ -111,7 +121,7 @@ async function main() {
             expDatum: new Date("2024-12-31"),
         },
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             typ: WareTyp.muster,
             primarschluessel: "M-022275",
             lagerplatzCode: "0003",
@@ -120,41 +130,9 @@ async function main() {
             temperatur: "2-8°C",
             expDatum: new Date("2025-03-20"),
         },
-        // Substanzen
+        // Vernichtetes Muster
         {
-            inventarId: inventar.id,
-            typ: WareTyp.substanz,
-            primarschluessel: "S-0009-001",
-            lagerplatzCode: "0010",
-            raum: "Raum 201",
-            bezeichnung: "Referenzstandard Acetylsalicylsäure",
-            temperatur: "-20°C",
-            expDatum: new Date("2026-01-15"),
-        },
-        {
-            inventarId: inventar.id,
-            typ: WareTyp.substanz,
-            primarschluessel: "S-0009-002",
-            lagerplatzCode: "0010",
-            raum: "Raum 201",
-            bezeichnung: "Referenzstandard Ibuprofen",
-            temperatur: "-20°C",
-            expDatum: new Date("2026-02-28"),
-        },
-        {
-            inventarId: inventar.id,
-            typ: WareTyp.substanz,
-            primarschluessel: "S-0009-003",
-            lagerplatzCode: "0011",
-            raum: "Raum 201",
-            bezeichnung: "Referenzstandard Paracetamol",
-            temperatur: "-20°C",
-            expDatum: new Date("2025-11-30"),
-            bearbStatus: BearbStatus.erfasst,
-        },
-        // Vernichtete Waren (nur Kontroll-Einträge, kein Lagerort-Scan erwartet)
-        {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             typ: WareTyp.muster,
             primarschluessel: "M-022280",
             lagerplatzCode: "VERNICHTET",
@@ -164,13 +142,46 @@ async function main() {
             expDatum: null,
             bearbStatus: BearbStatus.vernichtet,
         },
+        // === SUBSTANZEN (gehören zum Substanzen-Inventar) ===
         {
-            inventarId: inventar.id,
+            inventarId: inventarSubstanzen.id,
+            typ: WareTyp.substanz,
+            primarschluessel: "S-0009-001",
+            lagerplatzCode: "0010",
+            raum: "Raum 201",
+            bezeichnung: "Referenzstandard Acetylsalicylsäure",
+            temperatur: "-20°C",
+            expDatum: new Date("2026-01-15"),
+        },
+        {
+            inventarId: inventarSubstanzen.id,
+            typ: WareTyp.substanz,
+            primarschluessel: "S-0009-002",
+            lagerplatzCode: "0010",
+            raum: "Raum 201",
+            bezeichnung: "Referenzstandard Ibuprofen",
+            temperatur: "-20°C",
+            expDatum: new Date("2026-02-28"),
+        },
+        {
+            inventarId: inventarSubstanzen.id,
+            typ: WareTyp.substanz,
+            primarschluessel: "S-0009-003",
+            lagerplatzCode: "0011",
+            raum: "Raum 201",
+            bezeichnung: "Referenzstandard Paracetamol",
+            temperatur: "-20°C",
+            expDatum: new Date("2025-11-30"),
+            bearbStatus: BearbStatus.erfasst,
+        },
+        // Eliminierte Substanz (wie vernichtet bei Muster)
+        {
+            inventarId: inventarSubstanzen.id,
             typ: WareTyp.substanz,
             primarschluessel: "S-0009-010",
-            lagerplatzCode: "VERNICHTET",
+            lagerplatzCode: "ELIMINIERT",
             raum: null,
-            bezeichnung: "Alte Substanz - vernichtet",
+            bezeichnung: "Alte Substanz - eliminiert",
             temperatur: null,
             expDatum: null,
             bearbStatus: BearbStatus.vernichtet,
@@ -189,36 +200,28 @@ async function main() {
     console.log("📱 Erstelle IST-Scans...");
 
     const istScans = [
-        // Korrekte Scans
+        // Muster: Korrekte Scans
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             primarschluessel: "M-022272",
             lagerplatzCode: "0001",
             userId: normalUser.id,
             scanTyp: ScanTyp.ok,
         },
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             primarschluessel: "M-022273",
             lagerplatzCode: "0001",
             userId: normalUser.id,
             scanTyp: ScanTyp.ok,
         },
-        // Falsche Position
+        // Substanzen: Korrekter Scan
         {
-            inventarId: inventar.id,
-            primarschluessel: "M-022275",
-            lagerplatzCode: "0002", // Sollte in 0003 sein!
+            inventarId: inventarSubstanzen.id,
+            primarschluessel: "S-0009-001",
+            lagerplatzCode: "0010",
             userId: normalUser.id,
-            scanTyp: ScanTyp.falsch,
-        },
-        // Unbekannte Ware (nicht im SOLL)
-        {
-            inventarId: inventar.id,
-            primarschluessel: "M-099999",
-            lagerplatzCode: "0001",
-            userId: normalUser.id,
-            scanTyp: ScanTyp.neu,
+            scanTyp: ScanTyp.ok,
         },
     ];
 
@@ -235,24 +238,10 @@ async function main() {
 
     const abweichungen = [
         {
-            inventarId: inventar.id,
+            inventarId: inventarMuster.id,
             primarschluessel: "M-022274",
             typ: AbweichungTyp.fehlend,
             kommentar: null,
-            bestaetigtDurchId: null,
-        },
-        {
-            inventarId: inventar.id,
-            primarschluessel: "M-022275",
-            typ: AbweichungTyp.falsch,
-            kommentar: "Wurde in Lagerplatz 0002 statt 0003 gefunden",
-            bestaetigtDurchId: null,
-        },
-        {
-            inventarId: inventar.id,
-            primarschluessel: "M-099999",
-            typ: AbweichungTyp.neu,
-            kommentar: "Unbekanntes Muster, nicht im LIMS erfasst",
             bestaetigtDurchId: null,
         },
     ];
@@ -273,17 +262,17 @@ async function main() {
             userId: verantwortlicherUser.id,
             aktion: "inventar_erstellt",
             entitaet: "inventar",
-            referenzId: inventar.id,
-            inventarId: inventar.id,
-            details: JSON.stringify({ erstellt_von: verantwortlicherUser.name }),
+            referenzId: inventarMuster.id,
+            inventarId: inventarMuster.id,
+            details: JSON.stringify({ erstellt_von: verantwortlicherUser.name, typ: "MUSTER" }),
         },
         {
-            userId: normalUser.id,
-            aktion: "scan_durchgefuehrt",
-            entitaet: "ware_ist",
-            referenzId: null,
-            inventarId: inventar.id,
-            details: JSON.stringify({ anzahl_scans: 4 }),
+            userId: verantwortlicherUser.id,
+            aktion: "inventar_erstellt",
+            entitaet: "inventar",
+            referenzId: inventarSubstanzen.id,
+            inventarId: inventarSubstanzen.id,
+            details: JSON.stringify({ erstellt_von: verantwortlicherUser.name, typ: "SUBSTANZEN" }),
         },
     ];
 
@@ -299,7 +288,7 @@ async function main() {
     console.log("\n✅ Seeding abgeschlossen!");
     console.log("   Erstellt:");
     console.log("   - 3 Benutzer");
-    console.log("   - 1 Inventar");
+    console.log("   - 2 Inventare (Muster + Substanzen)");
     console.log(`   - ${sollWaren.length} SOLL-Waren`);
     console.log(`   - ${istScans.length} IST-Scans`);
     console.log(`   - ${abweichungen.length} Abweichungen`);
