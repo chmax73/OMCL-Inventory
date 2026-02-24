@@ -10,7 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 // xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
-import { WareTyp, BearbStatus } from "@prisma/client";
+import { WareTyp, BearbStatus, InventarTyp } from "@prisma/client";
 
 // Typ für eine Zeile aus der Excel-Datei
 type ExcelRow = {
@@ -36,8 +36,8 @@ export type UploadResult = {
     debug?: string;
 };
 
-// Erkennt den Bearbeitungsstatus aus dem Excel-Wert
-function detectBearbStatus(value: unknown): BearbStatus | "bestellt" | null {
+// Erkennt den Bearbeitungsstatus aus dem Excel-Wert (Muster)
+function detectBearbStatusMuster(value: unknown): BearbStatus | "bestellt" | null {
     if (!value) return null;
     const str = String(value).toLowerCase().trim();
     if (str.includes("vernichtet")) return BearbStatus.vernichtet;
@@ -46,6 +46,22 @@ function detectBearbStatus(value: unknown): BearbStatus | "bestellt" | null {
     if (str.includes("erfasst")) return BearbStatus.erfasst;
     // Unbekannter Status → als erfasst behandeln
     return BearbStatus.erfasst;
+}
+
+// Erkennt den Lot-Status aus dem Excel-Wert (Substanzen)
+// "geliefert", "freigegeben", "gesperrt", "in Prüfung" → importieren + scannen
+// "eliminiert" → importieren, nur für Fehlermeldung (wie vernichtet)
+// Alles andere → überspringen
+function detectLotStatus(value: unknown): BearbStatus | "skip" | null {
+    if (!value) return null;
+    const str = String(value).toLowerCase().trim();
+    if (str.includes("geliefert")) return BearbStatus.erfasst;
+    if (str.includes("freigegeben")) return BearbStatus.erfasst;
+    if (str.includes("gesperrt")) return BearbStatus.erfasst;
+    if (str.includes("prüfung")) return BearbStatus.erfasst;
+    if (str.includes("eliminiert")) return BearbStatus.vernichtet;
+    // Unbekannter Lot-Status → überspringen
+    return "skip";
 }
 
 // Erkennt den Warentyp anhand des Primärschlüssels
@@ -103,6 +119,8 @@ export async function uploadExcel(
             return { success: false, error: "Inventar ist bereits abgeschlossen" };
         }
 
+        const istSubstanzen = inventar.typ === InventarTyp.SUBSTANZEN;
+
         // Datei aus FormData holen
         const file = formData.get("file") as File;
         if (!file) {
@@ -139,98 +157,168 @@ export async function uploadExcel(
         let skippedBestellt = 0;
         let skippedNoPK = 0;
         let skippedNoLP = 0;
+        let skippedLotStatus = 0;
 
         for (let i = 0; i < rawData.length; i++) {
             const row = rawData[i];
             const lineNum = i + 2; // +2 wegen Header und 0-Index
-
-            // Pflichtfelder prüfen (flexible Spaltennamen - case-insensitive)
             const keys = Object.keys(row);
 
-            // Primärschlüssel finden (inkl. "Muster Nr. LIMS")
-            const primarschluesselKey = keys.find(k =>
-                k.toLowerCase().includes("primär") ||
-                k.toLowerCase().includes("primar") ||
-                k.toLowerCase().includes("schlüssel") ||
-                k.toLowerCase().includes("schluessel") ||
-                k.toLowerCase().includes("muster nr") ||
-                k.toLowerCase().includes("muster-nr") ||
-                k.toLowerCase().includes("musternr") ||
-                k.toLowerCase() === "barcode" ||
-                k.toLowerCase() === "id"
-            );
-            const primarschluessel = primarschluesselKey ? row[primarschluesselKey] : undefined;
+            if (istSubstanzen) {
+                // ============================================================
+                // SUBSTANZEN: Spalten-Mapping
+                // Interne Nr. → primarschluessel (Barcode S-xxxx)
+                // Standort → lagerplatzCode
+                // Name → bezeichnung
+                // Substanzkategorie → temperatur (Zusatzinfo)
+                // Lot-Status → bearbStatus
+                // ============================================================
+                const pkKey = keys.find(k =>
+                    k.toLowerCase().includes("interne") ||
+                    k.toLowerCase().includes("inventar_id") ||
+                    k.toLowerCase() === "inventar id"
+                );
+                const primarschluessel = pkKey ? row[pkKey] : undefined;
 
-            // Lagerplatz finden
-            const lagerplatzKey = keys.find(k =>
-                k.toLowerCase().includes("lagerplatz") ||
-                k.toLowerCase().includes("standort") ||
-                k.toLowerCase().includes("location")
-            );
-            const lagerplatzCode = lagerplatzKey ? row[lagerplatzKey] : undefined;
+                const lpKey = keys.find(k =>
+                    k.toLowerCase().includes("standort") ||
+                    k.toLowerCase().includes("lagerplatz")
+                );
+                const lagerplatzCode = lpKey ? row[lpKey] : undefined;
 
-            // Raum finden (inkl. "Räume - Raum Nr.")
-            const raumKey = keys.find(k =>
-                k.toLowerCase().includes("raum") ||
-                k.toLowerCase().includes("räume")
-            );
+                const nameKey = keys.find(k =>
+                    k.toLowerCase() === "name" ||
+                    k.toLowerCase().includes("substanzname")
+                );
 
-            // Bezeichnung finden (inkl. "Musterbezeichnung")
-            const bezeichnungKey = keys.find(k =>
-                k.toLowerCase().includes("bezeichnung") ||
-                k.toLowerCase().includes("beschreibung") ||
-                k.toLowerCase().includes("name")
-            );
+                const kategorieKey = keys.find(k =>
+                    k.toLowerCase().includes("substanzkategorie") ||
+                    k.toLowerCase().includes("kategorie")
+                );
 
-            // Temperatur finden (inkl. "Temperaturanforderung")
-            const temperaturKey = keys.find(k =>
-                k.toLowerCase().includes("temperatur")
-            );
+                const lotStatusKey = keys.find(k =>
+                    k.toLowerCase().includes("lot-status") ||
+                    k.toLowerCase().includes("lot status") ||
+                    k.toLowerCase().includes("lotstatus") ||
+                    k.toLowerCase() === "status"
+                );
 
-            if (!primarschluessel) {
-                skippedNoPK++;
-                if (skippedNoPK <= 3) errors.push(`Zeile ${lineNum}: Primärschlüssel fehlt`);
-                continue;
+                if (!primarschluessel) {
+                    skippedNoPK++;
+                    if (skippedNoPK <= 3) errors.push(`Zeile ${lineNum}: Interne Nr. fehlt`);
+                    continue;
+                }
+
+                const lotStatusRaw = lotStatusKey ? row[lotStatusKey] : null;
+                const lotStatus = detectLotStatus(lotStatusRaw);
+
+                // Unbekannter Lot-Status → überspringen
+                if (lotStatus === "skip") {
+                    skippedLotStatus++;
+                    continue;
+                }
+
+                const isEliminiert = lotStatus === BearbStatus.vernichtet;
+
+                if (!lagerplatzCode && !isEliminiert) {
+                    skippedNoLP++;
+                    if (skippedNoLP <= 3) errors.push(`Zeile ${lineNum}: Standort fehlt`);
+                    continue;
+                }
+
+                rows.push({
+                    primarschluessel: String(primarschluessel).trim(),
+                    lagerplatzCode: isEliminiert && !lagerplatzCode ? "ELIMINIERT" : String(lagerplatzCode).trim(),
+                    typ: WareTyp.substanz,
+                    raum: undefined,
+                    bezeichnung: nameKey && row[nameKey] ? String(row[nameKey]).trim() : undefined,
+                    temperatur: kategorieKey && row[kategorieKey] ? String(row[kategorieKey]).trim() : undefined,
+                    expDatum: undefined,
+                    bearbStatus: lotStatus ?? BearbStatus.erfasst,
+                });
+
+            } else {
+                // ============================================================
+                // MUSTER: Bestehendes Spalten-Mapping (unverändert)
+                // ============================================================
+                const primarschluesselKey = keys.find(k =>
+                    k.toLowerCase().includes("primär") ||
+                    k.toLowerCase().includes("primar") ||
+                    k.toLowerCase().includes("schlüssel") ||
+                    k.toLowerCase().includes("schluessel") ||
+                    k.toLowerCase().includes("muster nr") ||
+                    k.toLowerCase().includes("muster-nr") ||
+                    k.toLowerCase().includes("musternr") ||
+                    k.toLowerCase() === "barcode" ||
+                    k.toLowerCase() === "id"
+                );
+                const primarschluessel = primarschluesselKey ? row[primarschluesselKey] : undefined;
+
+                const lagerplatzKey = keys.find(k =>
+                    k.toLowerCase().includes("lagerplatz") ||
+                    k.toLowerCase().includes("standort") ||
+                    k.toLowerCase().includes("location")
+                );
+                const lagerplatzCode = lagerplatzKey ? row[lagerplatzKey] : undefined;
+
+                const raumKey = keys.find(k =>
+                    k.toLowerCase().includes("raum") ||
+                    k.toLowerCase().includes("räume")
+                );
+
+                const bezeichnungKey = keys.find(k =>
+                    k.toLowerCase().includes("bezeichnung") ||
+                    k.toLowerCase().includes("beschreibung") ||
+                    k.toLowerCase().includes("name")
+                );
+
+                const temperaturKey = keys.find(k =>
+                    k.toLowerCase().includes("temperatur")
+                );
+
+                if (!primarschluessel) {
+                    skippedNoPK++;
+                    if (skippedNoPK <= 3) errors.push(`Zeile ${lineNum}: Primärschlüssel fehlt`);
+                    continue;
+                }
+
+                const bearbStatusKey = keys.find(k =>
+                    k.toLowerCase().includes("bearb") ||
+                    k.toLowerCase().includes("status") ||
+                    k.toLowerCase().includes("stat")
+                );
+                const bearbStatusRaw = bearbStatusKey ? row[bearbStatusKey] : null;
+                const bearbStatus = detectBearbStatusMuster(bearbStatusRaw);
+
+                // "bestellt" → komplett ignorieren
+                if (bearbStatus === "bestellt") {
+                    skippedBestellt++;
+                    continue;
+                }
+
+                const isVernichtet = bearbStatus === BearbStatus.vernichtet;
+
+                if (!lagerplatzCode && !isVernichtet) {
+                    skippedNoLP++;
+                    if (skippedNoLP <= 3) errors.push(`Zeile ${lineNum}: Lagerplatz fehlt`);
+                    continue;
+                }
+
+                rows.push({
+                    primarschluessel: String(primarschluessel).trim(),
+                    lagerplatzCode: isVernichtet && !lagerplatzCode ? "VERNICHTET" : String(lagerplatzCode).trim(),
+                    typ: detectWareTyp(String(primarschluessel)),
+                    raum: raumKey && row[raumKey] ? String(row[raumKey]).trim() : undefined,
+                    bezeichnung: bezeichnungKey && row[bezeichnungKey] ? String(row[bezeichnungKey]).trim() : undefined,
+                    temperatur: temperaturKey && row[temperaturKey] ? String(row[temperaturKey]).trim() : undefined,
+                    expDatum: undefined,
+                    bearbStatus: bearbStatus ?? BearbStatus.erfasst,
+                });
             }
-
-            // Bearbeitungsstatus finden (Spalte G: "Bearb.stat. Muster")
-            const bearbStatusKey = keys.find(k =>
-                k.toLowerCase().includes("bearb") ||
-                k.toLowerCase().includes("status") ||
-                k.toLowerCase().includes("stat")
-            );
-            const bearbStatusRaw = bearbStatusKey ? row[bearbStatusKey] : null;
-            const bearbStatus = detectBearbStatus(bearbStatusRaw);
-
-            // "bestellt" → komplett ignorieren (kein DB-Eintrag)
-            if (bearbStatus === "bestellt") {
-                skippedBestellt++;
-                continue;
-            }
-
-            // Vernichtete Waren brauchen keinen Lagerplatz
-            const isVernichtet = bearbStatus === BearbStatus.vernichtet;
-
-            if (!lagerplatzCode && !isVernichtet) {
-                skippedNoLP++;
-                if (skippedNoLP <= 3) errors.push(`Zeile ${lineNum}: Lagerplatz fehlt`);
-                continue;
-            }
-
-            rows.push({
-                primarschluessel: String(primarschluessel).trim(),
-                lagerplatzCode: isVernichtet && !lagerplatzCode ? "VERNICHTET" : String(lagerplatzCode).trim(),
-                typ: detectWareTyp(String(primarschluessel)),
-                raum: raumKey && row[raumKey] ? String(row[raumKey]).trim() : undefined,
-                bezeichnung: bezeichnungKey && row[bezeichnungKey] ? String(row[bezeichnungKey]).trim() : undefined,
-                temperatur: temperaturKey && row[temperaturKey] ? String(row[temperaturKey]).trim() : undefined,
-                expDatum: undefined,
-                bearbStatus: bearbStatus ?? BearbStatus.erfasst,
-            });
         }
 
         // Debug-Info zusammenstellen
-        const debugInfo = `Spalten: ${firstRowKeys.join(", ")} | Total: ${rawData.length} | Bestellt: ${skippedBestellt} | Ohne PK: ${skippedNoPK} | Ohne LP: ${skippedNoLP} | Gültig: ${rows.length}`;
+        const debugInfo = `Typ: ${istSubstanzen ? "Substanzen" : "Muster"} | Spalten: ${firstRowKeys.join(", ")} | Total: ${rawData.length} | Bestellt: ${skippedBestellt} | Lot-Skip: ${skippedLotStatus} | Ohne PK: ${skippedNoPK} | Ohne LP: ${skippedNoLP} | Gültig: ${rows.length}`;
         console.log("[UPLOAD DEBUG]", debugInfo);
 
         if (rows.length === 0) {
@@ -304,6 +392,7 @@ export async function getInventarInfo(inventarId: string) {
 
     return {
         id: inventar.id,
+        typ: inventar.typ,
         erstelltAm: inventar.erstelltAm,
         erstelltVon: inventar.erstelltVon.name,
         sollWarenCount: inventar._count.sollWaren,
