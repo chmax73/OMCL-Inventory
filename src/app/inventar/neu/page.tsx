@@ -8,17 +8,25 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ClipboardPlus, AlertCircle, CheckCircle, ArrowRight } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ClipboardPlus, AlertCircle, CheckCircle, ArrowRight, Package, FlaskConical } from "lucide-react";
+import { InventarTyp } from "@prisma/client";
 import { useUser } from "@/context/UserContext";
 import { createInventar } from "./actions";
 
 export default function NeuesInventarPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+
+    // Typ aus URL-Parameter lesen (Standard: MUSTER)
+    const typParam = searchParams.get("typ");
+    const typ = typParam === "SUBSTANZEN" ? InventarTyp.SUBSTANZEN : InventarTyp.MUSTER;
+    const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "Substanzen";
+    const TypIcon = typ === InventarTyp.MUSTER ? Package : FlaskConical;
 
     const handleCreateInventar = async () => {
         if (!user) {
@@ -29,7 +37,7 @@ export default function NeuesInventarPage() {
         setIsLoading(true);
         setError(null);
 
-        const result = await createInventar(user.id);
+        const result = await createInventar(user.id, typ);
 
         if (result.success) {
             setSuccess(true);
@@ -95,12 +103,12 @@ export default function NeuesInventarPage() {
                 <div className="card-body">
                     {/* Header */}
                     <div className="text-center mb-6">
-                        <div className="bg-primary text-primary-content w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <ClipboardPlus className="w-8 h-8" />
+                        <div className={`${typ === InventarTyp.MUSTER ? "bg-primary text-primary-content" : "bg-secondary text-secondary-content"} w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                            <TypIcon className="w-8 h-8" />
                         </div>
-                        <h1 className="text-2xl font-bold">Neues Inventar erstellen</h1>
+                        <h1 className="text-2xl font-bold">Neues {typLabel}-Inventar erstellen</h1>
                         <p className="text-base-content/70 mt-2">
-                            Starte eine neue Inventur für das aktuelle Jahr.
+                            Starte eine neue {typLabel}-Inventur für das aktuelle Jahr.
                         </p>
                     </div>
 
@@ -124,7 +132,7 @@ export default function NeuesInventarPage() {
                         <div>
                             <p className="font-medium">Hinweis</p>
                             <p className="text-sm">
-                                Es kann immer nur ein offenes Inventar gleichzeitig existieren.
+                                Es kann pro Typ (Muster/Substanzen) immer nur ein offenes Inventar gleichzeitig existieren.
                                 Du brauchst eine Excel-Datei mit den SOLL-Daten aus dem LIMS.
                             </p>
                         </div>
@@ -149,7 +157,7 @@ export default function NeuesInventarPage() {
                         <button
                             onClick={handleCreateInventar}
                             disabled={isLoading}
-                            className="btn btn-primary gap-2"
+                            className={`btn ${typ === InventarTyp.MUSTER ? "btn-primary" : "btn-secondary"} gap-2`}
                         >
                             {isLoading ? (
                                 <>
@@ -158,7 +166,7 @@ export default function NeuesInventarPage() {
                                 </>
                             ) : (
                                 <>
-                                    Inventar erstellen
+                                    {typLabel}-Inventar erstellen
                                     <ArrowRight className="w-5 h-5" />
                                 </>
                             )}
