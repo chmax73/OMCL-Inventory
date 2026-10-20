@@ -1,15 +1,13 @@
 /**
- * UserContext - Prototyp-Authentifizierung
+ * UserContext - angemeldeter Inventur-Benutzer
  * -----------------------------------------
- * Speichert den aktuell ausgewählten Benutzer im Client-State.
- * 
- * HINWEIS: Dies ist nur für den Prototyp! In der finalen Version wird
- * Supabase Auth mit UserID und Passwort verwendet.
+ * Zeigt in der Oberflaeche ausschliesslich den serverseitig geprueften Benutzer.
+ * Ein Eintrag im Browser-Speicher kann dadurch keine Rolle mehr vorgaukeln.
  */
 
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 // Typ für einen Benutzer (vereinfacht)
 export type User = {
@@ -21,50 +19,19 @@ export type User = {
 // Context-Typ mit Benutzer und Funktionen
 type UserContextType = {
     user: User | null;
-    setUser: (user: User | null) => void;
     isLoading: boolean;
 };
 
 // Context erstellen mit Standardwerten
 const UserContext = createContext<UserContextType>({
     user: null,
-    setUser: () => { },
-    isLoading: true,
+    isLoading: false,
 });
 
-// localStorage-Key für Persistierung
-const STORAGE_KEY = "omcl-current-user";
-
-// Provider-Komponente
-export function UserProvider({ children }: { children: ReactNode }) {
-    const [user, setUserState] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Beim Laden: Benutzer aus localStorage wiederherstellen
-    useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            try {
-                setUserState(JSON.parse(stored));
-            } catch {
-                localStorage.removeItem(STORAGE_KEY);
-            }
-        }
-        setIsLoading(false);
-    }, []);
-
-    // Benutzer setzen und in localStorage speichern
-    const setUser = (newUser: User | null) => {
-        setUserState(newUser);
-        if (newUser) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-        } else {
-            localStorage.removeItem(STORAGE_KEY);
-        }
-    };
-
+// Der Server liefert die Rolle bei jedem Refresh aus der Datenbank.
+export function UserProvider({ children, initialUser }: { children: ReactNode; initialUser: User | null }) {
     return (
-        <UserContext.Provider value={{ user, setUser, isLoading }}>
+        <UserContext.Provider value={{ user: initialUser, isLoading: false }}>
             {children}
         </UserContext.Provider>
     );

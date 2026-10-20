@@ -112,7 +112,7 @@ export default function ScanPage() {
         if (!barcode.trim() || !inventar || !selectedLagerplatz || !user) return;
 
         setIsScanning(true);
-        const result = await scanBarcode(inventar.id, selectedLagerplatz, barcode.trim(), user.id);
+        const result = await scanBarcode(inventar.id, selectedLagerplatz, barcode.trim());
         setLastScanResult(result);
 
         if (result.success) {
@@ -152,7 +152,7 @@ export default function ScanPage() {
         if (!inventar || !selectedLagerplatz || !user) return;
 
         setIsConfirming(true);
-        const result = await confirmLagerplatz(inventar.id, selectedLagerplatz, user.id);
+        const result = await confirmLagerplatz(inventar.id, selectedLagerplatz);
 
         if (result.success) {
             setIsUeberprueft(true);
@@ -317,7 +317,7 @@ export default function ScanPage() {
                                                     e.stopPropagation();
                                                     if (!inventar || !user) return;
                                                     if (!confirm(`Lagerplatz ${lp.code} wiedereröffnen?`)) return;
-                                                    await reopenLagerplatz(inventar.id, lp.code, user.id);
+                                                    await reopenLagerplatz(inventar.id, lp.code);
                                                     const plaetze = await getLagerplaetze(inventar.id);
                                                     setLagerplaetze(plaetze);
                                                 }}

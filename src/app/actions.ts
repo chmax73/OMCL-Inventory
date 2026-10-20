@@ -8,6 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
 import { revalidatePath } from "next/cache";
 import { InventarTyp } from "@prisma/client";
 
@@ -136,18 +137,27 @@ export async function getArchivedInventarList(): Promise<InventarListItem[]> {
 // Inventar archivieren
 export async function archiveInventar(inventarId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        await prisma.inventar.update({
-            where: { id: inventarId },
+        await requireAdminUser();
+    } catch {
+        return { success: false, error: "Nur angemeldete Admins koennen Inventare archivieren." };
+    }
+
+    try {
+        const result = await prisma.inventar.updateMany({
+            where: { id: inventarId, abgeschlossen: true, archiviert: false },
             data: {
                 archiviert: true,
                 archiviertAm: new Date(),
             },
         });
+        if (result.count === 0) {
+            return { success: false, error: "Nur abgeschlossene, noch nicht archivierte Inventare koennen archiviert werden." };
+        }
         revalidatePath("/");
         revalidatePath("/archiv");
         return { success: true };
     } catch (error) {
-        console.error("Fehler beim Archivieren:", error);
+        console.error("Fehler beim Archivieren:", error instanceof Error ? error.name : "unbekannt");
         return { success: false, error: "Inventar konnte nicht archiviert werden" };
     }
 }

@@ -7,6 +7,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
 import { revalidatePath } from "next/cache";
 import { InventarTyp } from "@prisma/client";
 
@@ -18,20 +19,22 @@ export type CreateInventarResult = {
 };
 
 // Neues Inventar erstellen (Muster oder Substanzen)
-export async function createInventar(userId: string, typ: InventarTyp = InventarTyp.MUSTER): Promise<CreateInventarResult> {
+export async function createInventar(typ: InventarTyp = InventarTyp.MUSTER): Promise<CreateInventarResult> {
+    let user;
     try {
-        // Prüfen ob User existiert
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-        });
+        user = await requireAdminUser();
+    } catch {
+        return { success: false, error: "Nur angemeldete Admins koennen Inventare erstellen." };
+    }
 
-        if (!user) {
-            return { success: false, error: "Benutzer nicht gefunden" };
-        }
+    if (typ !== InventarTyp.MUSTER && typ !== InventarTyp.SUBSTANZEN) {
+        return { success: false, error: "Bitte einen gueltigen Inventartyp waehlen." };
+    }
 
+    try {
         // Prüfen ob bereits ein offenes Inventar dieses Typs existiert
         const openInventar = await prisma.inventar.findFirst({
-            where: { abgeschlossen: false, typ },
+            where: { abgeschlossen: false, archiviert: false, typ },
         });
 
         const typLabel = typ === InventarTyp.MUSTER ? "Muster" : "RM & Substanzen";
@@ -42,24 +45,22 @@ export async function createInventar(userId: string, typ: InventarTyp = Inventar
             };
         }
 
-        // Neues Inventar erstellen
-        const inventar = await prisma.inventar.create({
-            data: {
-                erstelltVonId: userId,
-                typ,
-            },
-        });
-
-        // Audit-Log erstellen
-        await prisma.auditTrail.create({
-            data: {
-                userId: userId,
-                aktion: "inventar_erstellt",
-                entitaet: "inventar",
-                referenzId: inventar.id,
-                inventarId: inventar.id,
-                details: JSON.stringify({ erstelltVon: user.name, typ }),
-            },
+        // Inventar und Protokoll werden gemeinsam gespeichert oder gar nicht.
+        const inventar = await prisma.$transaction(async (tx) => {
+            const created = await tx.inventar.create({
+                data: { erstelltVonId: user.id, typ },
+            });
+            await tx.auditTrail.create({
+                data: {
+                    userId: user.id,
+                    aktion: "inventar_erstellt",
+                    entitaet: "inventar",
+                    referenzId: created.id,
+                    inventarId: created.id,
+                    details: JSON.stringify({ erstelltVon: user.name, typ }),
+                },
+            });
+            return created;
         });
 
         // Cache invalidieren damit Dashboard aktualisiert wird
@@ -67,7 +68,7 @@ export async function createInventar(userId: string, typ: InventarTyp = Inventar
 
         return { success: true, inventarId: inventar.id };
     } catch (error) {
-        console.error("Fehler beim Erstellen des Inventars:", error);
+        console.error("Fehler beim Erstellen des Inventars:", error instanceof Error ? error.name : "unbekannt");
         return { success: false, error: "Ein unerwarteter Fehler ist aufgetreten" };
     }
 }

@@ -8,6 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
 import { revalidatePath } from "next/cache";
 
 // Typ für den Abschluss-Status
@@ -76,11 +77,23 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
 }
 
 // Inventar abschliessen
-export async function closeInventar(
-    inventarId: string,
-    userId: string
-): Promise<{ success: boolean; error?: string }> {
+export async function closeInventar(inventarId: string): Promise<{ success: boolean; error?: string }> {
+    let user;
     try {
+        user = await requireAdminUser();
+    } catch {
+        return { success: false, error: "Nur angemeldete Admins koennen Inventare abschliessen." };
+    }
+
+    try {
+        const inventar = await prisma.inventar.findFirst({
+            where: { id: inventarId, abgeschlossen: false, archiviert: false },
+            select: { id: true },
+        });
+        if (!inventar) {
+            return { success: false, error: "Nur offene, nicht archivierte Inventare koennen abgeschlossen werden." };
+        }
+
         // Status prüfen
         const status = await getAbschlussStatus(inventarId);
 
@@ -91,26 +104,26 @@ export async function closeInventar(
             };
         }
 
-        // Inventar als abgeschlossen markieren
-        await prisma.inventar.update({
-            where: { id: inventarId },
-            data: {
-                abgeschlossen: true,
-                abgeschlossenAm: new Date(),
-            },
+        // Status und Audit-Protokoll werden gemeinsam gespeichert oder gar nicht.
+        const updated = await prisma.$transaction(async (tx) => {
+            const result = await tx.inventar.updateMany({
+                where: { id: inventarId, abgeschlossen: false, archiviert: false },
+                data: { abgeschlossen: true, abgeschlossenAm: new Date() },
+            });
+            if (result.count === 0) return false;
+            await tx.auditTrail.create({
+                data: {
+                    userId: user.id,
+                    aktion: "inventar_abgeschlossen",
+                    entitaet: "inventar",
+                    referenzId: inventarId,
+                    inventarId,
+                    details: JSON.stringify(status.stats),
+                },
+            });
+            return true;
         });
-
-        // Audit-Log erstellen
-        await prisma.auditTrail.create({
-            data: {
-                userId,
-                aktion: "inventar_abgeschlossen",
-                entitaet: "inventar",
-                referenzId: inventarId,
-                inventarId,
-                details: JSON.stringify(status.stats),
-            },
-        });
+        if (!updated) return { success: false, error: "Inventar wurde bereits abgeschlossen oder archiviert." };
 
         revalidatePath("/");
         revalidatePath("/scan");
@@ -118,7 +131,7 @@ export async function closeInventar(
 
         return { success: true };
     } catch (error) {
-        console.error("Fehler beim Abschliessen:", error);
+        console.error("Fehler beim Abschliessen:", error instanceof Error ? error.name : "unbekannt");
         return { success: false, error: "Inventar konnte nicht abgeschlossen werden" };
     }
 }

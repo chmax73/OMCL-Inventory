@@ -34,22 +34,23 @@ export default function AbschliessenPage() {
 
     // Status laden
     useEffect(() => {
+        if (user?.rolle !== "admin") return;
         async function loadStatus() {
             const s = await getAbschlussStatus(inventarId);
             setStatus(s);
             setIsLoading(false);
         }
         loadStatus();
-    }, [inventarId]);
+    }, [inventarId, user?.rolle]);
 
     // Inventar abschliessen
     const handleClose = async () => {
-        if (!user) return;
+        if (user?.rolle !== "admin") return;
 
         setIsClosing(true);
         setError(null);
 
-        const result = await closeInventar(inventarId, user.id);
+        const result = await closeInventar(inventarId);
 
         if (result.success) {
             setSuccess(true);
@@ -61,17 +62,23 @@ export default function AbschliessenPage() {
         setIsClosing(false);
     };
 
+    if (user?.rolle !== "admin") {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Nur Admins koennen Inventare abschliessen.
+                <button onClick={() => router.push(user ? "/" : "/login")} className="btn btn-primary">
+                    {user ? "Zum Dashboard" : "Zur Anmeldung"}
+                </button>
+            </div>
+        );
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
                 <span className="loading loading-spinner loading-lg text-primary"></span>
             </div>
         );
-    }
-
-    if (!user) {
-        router.push("/login");
-        return null;
     }
 
     if (!status) {
@@ -119,8 +126,8 @@ export default function AbschliessenPage() {
                         </div>
                         <progress
                             className={`progress w-full ${status.stats.lagerplaetzeUeberprueft === status.stats.lagerplaetzeTotal
-                                    ? "progress-success"
-                                    : "progress-warning"
+                                ? "progress-success"
+                                : "progress-warning"
                                 }`}
                             value={status.stats.lagerplaetzeUeberprueft}
                             max={status.stats.lagerplaetzeTotal}
@@ -141,8 +148,8 @@ export default function AbschliessenPage() {
                         </div>
                         <progress
                             className={`progress w-full ${status.stats.abweichungenOffen === 0
-                                    ? "progress-success"
-                                    : "progress-error"
+                                ? "progress-success"
+                                : "progress-error"
                                 }`}
                             value={status.stats.abweichungenTotal - status.stats.abweichungenOffen}
                             max={status.stats.abweichungenTotal || 1}

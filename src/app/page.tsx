@@ -14,21 +14,25 @@ import Link from "next/link";
 import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText, ListChecks, Archive, FlaskConical, Package } from "lucide-react";
 import { getDashboardStats, getInventarList, type InventarListItem } from "./actions";
 import ArchiveButton from "@/components/ArchiveButton";
+import { getVerifiedIdentity } from "@/lib/auth/identity";
 
 // Wiederverwendbare Inventar-Tabelle für Muster und Substanzen
-function InventarTabelle({ inventare, neuLink, label }: {
+function InventarTabelle({ inventare, neuLink, label, canCreate }: {
   inventare: InventarListItem[];
   neuLink: string;
   label: string;
+  canCreate: boolean;
 }) {
   if (inventare.length === 0) {
     return (
       <div className="text-center py-8 text-base-content/50">
         <ClipboardPlus className="w-12 h-12 mx-auto mb-2 opacity-50" />
         <p>Noch keine {label}-Inventare vorhanden</p>
-        <Link href={neuLink} className="btn btn-primary btn-sm mt-4">
-          Erstes {label}-Inventar erstellen
-        </Link>
+        {canCreate && (
+          <Link href={neuLink} className="btn btn-primary btn-sm mt-4">
+            Erstes {label}-Inventar erstellen
+          </Link>
+        )}
       </div>
     );
   }
@@ -87,7 +91,7 @@ function InventarTabelle({ inventare, neuLink, label }: {
                         <ListChecks className="w-3 h-3" />
                         Abweichungen
                       </Link>
-                      <ArchiveButton inventarId={inv.id} />
+                      {canCreate && <ArchiveButton inventarId={inv.id} />}
                     </>
                   ) : (
                     <>
@@ -98,10 +102,12 @@ function InventarTabelle({ inventare, neuLink, label }: {
                         <ListChecks className="w-3 h-3" />
                         Abweichungen
                       </Link>
-                      <Link href={`/inventar/${inv.id}/abschliessen`} className="btn btn-sm btn-success gap-1">
-                        <Lock className="w-3 h-3" />
-                        Abschliessen
-                      </Link>
+                      {canCreate && (
+                        <Link href={`/inventar/${inv.id}/abschliessen`} className="btn btn-sm btn-success gap-1">
+                          <Lock className="w-3 h-3" />
+                          Abschliessen
+                        </Link>
+                      )}
                     </>
                   )}
                 </td>
@@ -115,6 +121,9 @@ function InventarTabelle({ inventare, neuLink, label }: {
 }
 
 export default async function Dashboard() {
+  const identity = await getVerifiedIdentity();
+  const canCreate = identity?.appUser?.rolle === "admin";
+
   // Daten parallel aus der Datenbank laden (Muster + Substanzen getrennt)
   const [stats, musterInventare, substanzenInventare] = await Promise.all([
     getDashboardStats(),
@@ -184,12 +193,14 @@ export default async function Dashboard() {
               <Package className="w-5 h-5 text-primary" />
               Muster-Inventare
             </h2>
-            <Link href="/inventar/neu?typ=MUSTER" className="btn btn-sm btn-primary gap-1">
-              <ClipboardPlus className="w-4 h-4" />
-              Neues Muster-Inventar
-            </Link>
+            {canCreate && (
+              <Link href="/inventar/neu?typ=MUSTER" className="btn btn-sm btn-primary gap-1">
+                <ClipboardPlus className="w-4 h-4" />
+                Neues Muster-Inventar
+              </Link>
+            )}
           </div>
-          <InventarTabelle inventare={musterInventare} neuLink="/inventar/neu?typ=MUSTER" label="Muster" />
+          <InventarTabelle inventare={musterInventare} neuLink="/inventar/neu?typ=MUSTER" label="Muster" canCreate={canCreate} />
         </div>
       </div>
 
@@ -201,12 +212,14 @@ export default async function Dashboard() {
               <FlaskConical className="w-5 h-5 text-secondary" />
               RM & Substanzen-Inventare
             </h2>
-            <Link href="/inventar/neu?typ=SUBSTANZEN" className="btn btn-sm btn-secondary gap-1">
-              <ClipboardPlus className="w-4 h-4" />
-              Neues RM & Substanzen-Inventar
-            </Link>
+            {canCreate && (
+              <Link href="/inventar/neu?typ=SUBSTANZEN" className="btn btn-sm btn-secondary gap-1">
+                <ClipboardPlus className="w-4 h-4" />
+                Neues RM & Substanzen-Inventar
+              </Link>
+            )}
           </div>
-          <InventarTabelle inventare={substanzenInventare} neuLink="/inventar/neu?typ=SUBSTANZEN" label="RM & Substanzen" />
+          <InventarTabelle inventare={substanzenInventare} neuLink="/inventar/neu?typ=SUBSTANZEN" label="RM & Substanzen" canCreate={canCreate} />
         </div>
       </div>
     </div>

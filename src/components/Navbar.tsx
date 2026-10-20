@@ -8,7 +8,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
     LayoutDashboard,
     ClipboardPlus,
@@ -21,6 +22,7 @@ import {
     UserCheck
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
+import { signOutFromAuth } from "@/app/auth/login/actions";
 
 // Navigation-Links mit Icon und Pfad
 const navLinks = [
@@ -45,15 +47,27 @@ function RoleIcon({ rolle }: { rolle: string }) {
 
 // User-Dropdown-Komponente
 function UserDropdown() {
-    const { user, setUser } = useUser();
+    const { user } = useUser();
+    const router = useRouter();
+    const [logoutError, setLogoutError] = useState(false);
 
-    const handleLogout = () => {
-        setUser(null);
+    const handleLogout = async () => {
+        try {
+            const result = await signOutFromAuth();
+            if (!result.success) {
+                setLogoutError(true);
+                return;
+            }
+            router.push("/auth/login");
+            router.refresh();
+        } catch {
+            setLogoutError(true);
+        }
     };
 
     if (!user) {
         return (
-            <Link href="/login" className="btn btn-ghost gap-2">
+            <Link href="/auth/login" className="btn btn-ghost gap-2">
                 <User className="w-5 h-5" />
                 Anmelden
             </Link>
@@ -74,17 +88,12 @@ function UserDropdown() {
                     <span>{user.name}</span>
                 </li>
                 <li>
-                    <Link href="/login">
-                        <User className="w-4 h-4" />
-                        Benutzer wechseln
-                    </Link>
-                </li>
-                <li>
                     <button onClick={handleLogout} className="text-error">
                         <LogOut className="w-4 h-4" />
                         Abmelden
                     </button>
                 </li>
+                {logoutError && <li><span className="text-error">Abmelden fehlgeschlagen.</span></li>}
             </ul>
         </div>
     );
@@ -93,6 +102,8 @@ function UserDropdown() {
 export default function Navbar() {
     // usePathname gibt den aktuellen Pfad zurück (z.B. "/scan")
     const pathname = usePathname();
+    const { user } = useUser();
+    const visibleLinks = navLinks.filter((link) => link.href !== "/inventar/neu" || user?.rolle === "admin");
 
     return (
         <div className="navbar bg-base-200 shadow-md">
@@ -107,7 +118,7 @@ export default function Navbar() {
             {/* Navigation in der Mitte */}
             <div className="navbar-center hidden lg:flex">
                 <ul className="menu menu-horizontal px-1 gap-1">
-                    {navLinks.map((link) => {
+                    {visibleLinks.map((link) => {
                         // Prüfe ob dieser Link aktiv ist
                         const isActive = pathname === link.href;
                         const Icon = link.icon;
@@ -155,7 +166,7 @@ export default function Navbar() {
                         tabIndex={0}
                         className="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
                     >
-                        {navLinks.map((link) => {
+                        {visibleLinks.map((link) => {
                             const Icon = link.icon;
                             return (
                                 <li key={link.href}>

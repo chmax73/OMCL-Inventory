@@ -10,6 +10,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { UserProvider } from "@/context/UserContext";
+import { getVerifiedIdentity } from "@/lib/auth/identity";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,17 +29,19 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const identity = await getVerifiedIdentity();
+
   return (
     <html lang="de" data-theme="corporate">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-base-100`}
       >
-        <UserProvider>
+        <UserProvider initialUser={identity?.appUser ?? null}>
           <Navbar />
           <main className="container mx-auto px-4 py-6">
             {children}

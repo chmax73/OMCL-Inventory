@@ -29,15 +29,15 @@ export default function NeuesInventarPage() {
     const TypIcon = typ === InventarTyp.MUSTER ? Package : FlaskConical;
 
     const handleCreateInventar = async () => {
-        if (!user) {
-            setError("Bitte melde dich zuerst an.");
+        if (user?.rolle !== "admin") {
+            setError("Nur Admins koennen ein neues Inventar erstellen.");
             return;
         }
 
         setIsLoading(true);
         setError(null);
 
-        const result = await createInventar(user.id, typ);
+        const result = await createInventar(typ);
 
         if (result.success) {
             setSuccess(true);
@@ -52,23 +52,23 @@ export default function NeuesInventarPage() {
         setIsLoading(false);
     };
 
-    // Nicht angemeldet
-    if (!user) {
+    // Nur Admins duerfen ein Inventar erstellen; die Server Action prueft das erneut.
+    if (user?.rolle !== "admin") {
         return (
             <div className="max-w-md mx-auto mt-12">
                 <div className="card bg-base-200 shadow-xl">
                     <div className="card-body text-center">
                         <AlertCircle className="w-16 h-16 text-warning mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold">Nicht angemeldet</h1>
+                        <h1 className="text-2xl font-bold">Keine Berechtigung</h1>
                         <p className="text-base-content/70 mt-2">
-                            Bitte melde dich an, um ein neues Inventar zu erstellen.
+                            Nur Admins koennen ein neues Inventar erstellen.
                         </p>
                         <div className="card-actions justify-center mt-4">
                             <button
-                                onClick={() => router.push("/login")}
+                                onClick={() => router.push(user ? "/" : "/login")}
                                 className="btn btn-primary"
                             >
-                                Zur Anmeldung
+                                {user ? "Zurueck zum Dashboard" : "Zur Anmeldung"}
                             </button>
                         </div>
                     </div>

@@ -8,6 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticatedAppUser } from "@/lib/auth/identity";
 import { revalidatePath } from "next/cache";
 import { ScanTyp, BearbStatus, InventarTyp } from "@prisma/client";
 
@@ -220,13 +221,22 @@ function isValidBarcode(barcode: string, inventarTyp: InventarTyp): boolean {
 export async function scanBarcode(
     inventarId: string,
     lagerplatzCode: string,
-    barcode: string,
-    userId: string
+    barcode: string
 ): Promise<ScanResult> {
+    let user;
+    try {
+        user = await requireAuthenticatedAppUser();
+    } catch {
+        return { success: false, error: "Bitte zuerst mit einem aktiven Konto anmelden." };
+    }
+
     try {
         // Inventar-Typ laden für Barcode-Validierung
-        const inventar = await prisma.inventar.findUnique({ where: { id: inventarId }, select: { typ: true } });
-        if (!inventar) return { success: false, error: "Inventar nicht gefunden" };
+        const inventar = await prisma.inventar.findFirst({
+            where: { id: inventarId, abgeschlossen: false, archiviert: false },
+            select: { typ: true },
+        });
+        if (!inventar) return { success: false, error: "Kein offenes Inventar gefunden" };
 
         // Barcode-Format validieren (typ-abhängig)
         if (!isValidBarcode(barcode, inventar.typ)) {
@@ -322,7 +332,7 @@ export async function scanBarcode(
                 inventarId,
                 primarschluessel: barcode,
                 lagerplatzCode,
-                userId,
+                userId: user.id,
                 scanTyp,
             },
         });
@@ -353,10 +363,22 @@ export async function scanBarcode(
 // Lagerplatz als überprüft markieren
 export async function confirmLagerplatz(
     inventarId: string,
-    lagerplatzCode: string,
-    userId: string
+    lagerplatzCode: string
 ): Promise<{ success: boolean; error?: string; fehlendeWaren?: number }> {
+    let user;
     try {
+        user = await requireAuthenticatedAppUser();
+    } catch {
+        return { success: false, error: "Bitte zuerst mit einem aktiven Konto anmelden." };
+    }
+
+    try {
+        const inventar = await prisma.inventar.findFirst({
+            where: { id: inventarId, abgeschlossen: false, archiviert: false },
+            select: { id: true },
+        });
+        if (!inventar) return { success: false, error: "Kein offenes Inventar gefunden" };
+
         // Prüfen ob bereits überprüft
         const existing = await prisma.lagerplatzUeberprueft.findUnique({
             where: {
@@ -420,14 +442,14 @@ export async function confirmLagerplatz(
             data: {
                 inventarId,
                 lagerplatzCode,
-                ueberprueftVonId: userId,
+                ueberprueftVonId: user.id,
             },
         });
 
         // Audit-Log erstellen
         await prisma.auditTrail.create({
             data: {
-                userId,
+                userId: user.id,
                 aktion: "lagerplatz_ueberprueft",
                 entitaet: "lagerplatz",
                 referenzId: lagerplatzCode,
@@ -469,10 +491,22 @@ export async function isLagerplatzUeberprueft(
 // Lagerplatz wiedereröffnen (Überprüft-Status entfernen)
 export async function reopenLagerplatz(
     inventarId: string,
-    lagerplatzCode: string,
-    userId: string
+    lagerplatzCode: string
 ): Promise<{ success: boolean; error?: string }> {
+    let user;
     try {
+        user = await requireAuthenticatedAppUser();
+    } catch {
+        return { success: false, error: "Bitte zuerst mit einem aktiven Konto anmelden." };
+    }
+
+    try {
+        const inventar = await prisma.inventar.findFirst({
+            where: { id: inventarId, abgeschlossen: false, archiviert: false },
+            select: { id: true },
+        });
+        if (!inventar) return { success: false, error: "Kein offenes Inventar gefunden" };
+
         await prisma.lagerplatzUeberprueft.delete({
             where: {
                 inventarId_lagerplatzCode: {
@@ -485,7 +519,7 @@ export async function reopenLagerplatz(
         // Audit-Log erstellen
         await prisma.auditTrail.create({
             data: {
-                userId,
+                userId: user.id,
                 aktion: "lagerplatz_wiedereroeffnet",
                 entitaet: "lagerplatz",
                 referenzId: lagerplatzCode,

@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAccountDeactivated } from "./account-status";
 import { requiresPasswordChange } from "./password-policy";
-import { isAdminRole } from "./roles";
+import { canUseInventory, isAdminRole } from "./roles";
 
 export async function getVerifiedIdentity() {
     const supabase = await createSupabaseServerClient();
@@ -35,11 +35,20 @@ export async function getVerifiedIdentity() {
     };
 }
 
-export async function requireAdminUser() {
+export async function requireAuthenticatedAppUser() {
     const identity = await getVerifiedIdentity();
     const appUser = identity?.appUser;
 
-    if (!appUser || identity.mustChangePassword || !isAdminRole(appUser.rolle)) {
+    if (!appUser || !canUseInventory(identity)) {
+        throw new Error("Bitte zuerst anmelden und das Startpasswort ersetzen.");
+    }
+
+    return appUser;
+}
+
+export async function requireAdminUser() {
+    const appUser = await requireAuthenticatedAppUser();
+    if (!isAdminRole(appUser.rolle)) {
         throw new Error("Diese Funktion ist nur fuer angemeldete Admins verfuegbar.");
     }
 

@@ -1,33 +1,10 @@
 /**
- * Login Actions
- * -------------
- * Server Actions für die Benutzerauswahl.
- * Lädt alle verfügbaren Benutzer aus der Datenbank.
+ * Die fruehere Benutzerauswahl ist ausser Betrieb.
+ * Echte Logins laufen ausschliesslich ueber Supabase Auth.
  */
 
 "use server";
 
-import { prisma } from "@/lib/prisma";
-
-// Typ für die Rückgabe (ohne sensible Daten)
-export type UserOption = {
-    id: string;
-    name: string;
-    rolle: "admin" | "verantwortlich" | "user";
-};
-
-// Alle Benutzer laden
-export async function getUsers(): Promise<UserOption[]> {
-    const users = await prisma.user.findMany({
-        select: {
-            id: true,
-            name: true,
-            rolle: true,
-        },
-        orderBy: {
-            name: "asc",
-        },
-    });
-
-    return users;
+export async function getUsers(): Promise<never> {
+    throw new Error("Die Dummy-Benutzerauswahl wurde deaktiviert. Bitte /auth/login verwenden.");
 }

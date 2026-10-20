@@ -8,3 +8,7 @@ import type { UserRole } from "@prisma/client";
 export function isAdminRole(rolle: UserRole | null | undefined): boolean {
     return rolle === "admin";
 }
+
+export function canUseInventory(identity: { appUser: unknown | null; mustChangePassword: boolean } | null): boolean {
+    return Boolean(identity?.appUser && !identity.mustChangePassword);
+}
