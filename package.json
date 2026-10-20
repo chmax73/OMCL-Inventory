@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 next dev",
     "build": "prisma generate && next build",
+    "bootstrap-admin": "node --env-file=.env.local --import tsx src/scripts/bootstrap-admin.ts",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
@@ -13,6 +14,8 @@
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "7.3.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.118.0",
     "daisyui": "^5.5.14",
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
