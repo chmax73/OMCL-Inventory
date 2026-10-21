@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser, requireAuthenticatedAppUser } from "@/lib/auth/identity";
+import { OK_SCAN_WHERE, SCANNABLE_SOLL_WHERE } from "@/lib/inventory-progress";
 import { revalidatePath } from "next/cache";
 import { InventarTyp } from "@prisma/client";
 
@@ -87,8 +88,8 @@ export async function getInventarList(typ?: InventarTyp): Promise<InventarListIt
             },
             _count: {
                 select: {
-                    sollWaren: true,
-                    istWaren: true,
+                    sollWaren: { where: SCANNABLE_SOLL_WHERE },
+                    istWaren: { where: OK_SCAN_WHERE },
                 },
             },
         },
@@ -120,8 +121,8 @@ export async function getArchivedInventarList(): Promise<InventarListItem[]> {
             },
             _count: {
                 select: {
-                    sollWaren: true,
-                    istWaren: true,
+                    sollWaren: { where: SCANNABLE_SOLL_WHERE },
+                    istWaren: { where: OK_SCAN_WHERE },
                 },
             },
         },

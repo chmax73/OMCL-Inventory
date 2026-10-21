@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedAppUser } from "@/lib/auth/identity";
+import { OK_SCAN_WHERE, SCANNABLE_SOLL_WHERE } from "@/lib/inventory-progress";
 import { revalidatePath } from "next/cache";
 import { ScanTyp, BearbStatus, InventarTyp } from "@prisma/client";
 
@@ -57,11 +58,11 @@ export async function getActiveInventar(inventarId?: string): Promise<ActiveInve
     const inventar = inventarId
         ? await prisma.inventar.findFirst({
             where: { id: inventarId, abgeschlossen: false, archiviert: false },
-            include: { _count: { select: { sollWaren: true } } },
+            include: { _count: { select: { sollWaren: { where: SCANNABLE_SOLL_WHERE } } } },
         })
         : await prisma.inventar.findFirst({
             where: { abgeschlossen: false, archiviert: false },
-            include: { _count: { select: { sollWaren: true } } },
+            include: { _count: { select: { sollWaren: { where: SCANNABLE_SOLL_WHERE } } } },
         });
 
     if (!inventar) return null;
@@ -70,7 +71,7 @@ export async function getActiveInventar(inventarId?: string): Promise<ActiveInve
     const okScansCount = await prisma.wareIst.count({
         where: {
             inventarId: inventar.id,
-            scanTyp: ScanTyp.ok,
+            ...OK_SCAN_WHERE,
         },
     });
 
@@ -91,7 +92,7 @@ export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInf
     const sollWaren = await prisma.wareSoll.findMany({
         where: {
             inventarId,
-            bearbStatus: { not: BearbStatus.vernichtet },
+            ...SCANNABLE_SOLL_WHERE,
         },
         select: {
             lagerplatzCode: true,
@@ -162,7 +163,7 @@ export async function getSollWarenForLagerplatz(
         where: {
             inventarId,
             lagerplatzCode,
-            bearbStatus: { not: BearbStatus.vernichtet },
+            ...SCANNABLE_SOLL_WHERE,
         },
         orderBy: { primarschluessel: "asc" },
     });
@@ -404,7 +405,7 @@ export async function confirmLagerplatz(
             where: {
                 inventarId,
                 lagerplatzCode,
-                bearbStatus: { not: BearbStatus.vernichtet },
+                ...SCANNABLE_SOLL_WHERE,
             },
             select: { primarschluessel: true },
         });

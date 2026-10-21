@@ -19,10 +19,12 @@ import {
     User,
     LogOut,
     Shield,
-    UserCheck
+    UserCheck,
+    UsersRound,
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { signOutFromAuth } from "@/app/auth/login/actions";
+import { canSeeNavigationLink } from "./navigation-visibility";
 
 // Navigation-Links mit Icon und Pfad
 const navLinks = [
@@ -31,6 +33,7 @@ const navLinks = [
     { href: "/scan", label: "Scannen", icon: ScanBarcode },
     { href: "/abweichungen", label: "Abweichungen", icon: AlertTriangle },
     { href: "/audit", label: "Verlauf", icon: History },
+    { href: "/auth/users", label: "Benutzerverwaltung", icon: UsersRound },
 ];
 
 // Icon basierend auf der Rolle
@@ -87,6 +90,14 @@ function UserDropdown() {
                 <li className="menu-title">
                     <span>{user.name}</span>
                 </li>
+                {user.rolle === "admin" && (
+                    <li>
+                        <Link href="/auth/users">
+                            <UsersRound className="w-4 h-4" />
+                            Benutzerverwaltung
+                        </Link>
+                    </li>
+                )}
                 <li>
                     <button onClick={handleLogout} className="text-error">
                         <LogOut className="w-4 h-4" />
@@ -103,9 +114,7 @@ export default function Navbar() {
     // usePathname gibt den aktuellen Pfad zurück (z.B. "/scan")
     const pathname = usePathname();
     const { user } = useUser();
-    const visibleLinks = navLinks.filter((link) =>
-        !["/inventar/neu", "/audit"].includes(link.href) || user?.rolle === "admin"
-    );
+    const visibleLinks = navLinks.filter((link) => canSeeNavigationLink(link.href, user?.rolle));
 
     return (
         <div className="navbar bg-base-200 shadow-md">

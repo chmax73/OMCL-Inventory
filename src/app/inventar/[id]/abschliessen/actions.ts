@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser } from "@/lib/auth/identity";
+import { OK_SCAN_WHERE, SCANNABLE_SOLL_WHERE } from "@/lib/inventory-progress";
 import { revalidatePath } from "next/cache";
 
 // Typ für den Abschluss-Status
@@ -31,8 +32,8 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
 
     // Statistiken laden
     const [sollWaren, istScans, abweichungen, lagerplaetzeUeberprueft] = await Promise.all([
-        prisma.wareSoll.count({ where: { inventarId } }),
-        prisma.wareIst.count({ where: { inventarId } }),
+        prisma.wareSoll.count({ where: { inventarId, ...SCANNABLE_SOLL_WHERE } }),
+        prisma.wareIst.count({ where: { inventarId, ...OK_SCAN_WHERE } }),
         prisma.abweichung.findMany({
             where: { inventarId },
             select: { bestaetigtAm: true },
@@ -42,7 +43,7 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
 
     // Anzahl Lagerplätze ermitteln
     const lagerplaetze = await prisma.wareSoll.findMany({
-        where: { inventarId },
+        where: { inventarId, ...SCANNABLE_SOLL_WHERE },
         select: { lagerplatzCode: true },
         distinct: ["lagerplatzCode"],
     });
