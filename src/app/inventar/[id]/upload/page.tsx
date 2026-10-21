@@ -18,11 +18,13 @@ import {
     X,
     Download
 } from "lucide-react";
+import { useUser } from "@/context/UserContext";
 import { uploadExcel, getInventarInfo, type UploadResult } from "./actions";
 
 export default function UploadPage() {
     const router = useRouter();
     const params = useParams();
+    const { user } = useUser();
     const inventarId = params.id as string;
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,13 +43,14 @@ export default function UploadPage() {
 
     // Inventar-Infos laden
     useEffect(() => {
+        if (user?.rolle !== "admin") return;
         async function loadInfo() {
             const info = await getInventarInfo(inventarId);
             setInventarInfo(info);
             setIsLoading(false);
         }
         loadInfo();
-    }, [inventarId]);
+    }, [inventarId, user?.rolle]);
 
     // Datei auswählen
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,7 +73,7 @@ export default function UploadPage() {
 
     // Upload starten
     const handleUpload = async () => {
-        if (!file) return;
+        if (!file || user?.rolle !== "admin") return;
 
         setIsUploading(true);
         setResult(null);
@@ -97,6 +100,17 @@ export default function UploadPage() {
             fileInputRef.current.value = "";
         }
     };
+
+    if (user?.rolle !== "admin") {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Nur Admins koennen SOLL-Daten importieren.
+                <button onClick={() => router.push(user ? "/" : "/login")} className="btn btn-primary">
+                    {user ? "Zum Dashboard" : "Zur Anmeldung"}
+                </button>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (

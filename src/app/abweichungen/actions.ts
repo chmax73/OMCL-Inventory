@@ -8,6 +8,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
+import { confirmAbweichungSchema } from "@/lib/abweichung-validation";
 import { revalidatePath } from "next/cache";
 import { AbweichungTyp } from "@prisma/client";
 
@@ -76,36 +78,66 @@ export async function getAbweichungen(inventarId: string): Promise<AbweichungIte
 // Abweichung bestätigen
 export async function confirmAbweichung(
     abweichungId: string,
-    userId: string,
     kommentar: string | null
 ): Promise<{ success: boolean; error?: string }> {
-    try {
-        const abweichung = await prisma.abweichung.update({
-            where: { id: abweichungId },
-            data: {
-                bestaetigtDurchId: userId,
-                bestaetigtAm: new Date(),
-                kommentar: kommentar || undefined,
-            },
-        });
+    const parsed = confirmAbweichungSchema.safeParse({ abweichungId, kommentar });
+    if (!parsed.success) {
+        return { success: false, error: parsed.error.issues[0]?.message ?? "Eingaben sind ungueltig." };
+    }
 
-        // Audit-Log erstellen
-        await prisma.auditTrail.create({
-            data: {
-                userId,
-                aktion: "abweichung_bestaetigt",
-                entitaet: "abweichung",
-                referenzId: abweichungId,
-                inventarId: abweichung.inventarId,
-                details: JSON.stringify({ primarschluessel: abweichung.primarschluessel, kommentar }),
-            },
+    let user;
+    try {
+        user = await requireAdminUser();
+    } catch {
+        return { success: false, error: "Nur angemeldete Admins koennen Abweichungen bestaetigen." };
+    }
+
+    try {
+        const abweichung = await prisma.abweichung.findUnique({
+            where: { id: parsed.data.abweichungId },
+            select: { inventarId: true, primarschluessel: true },
         });
+        if (!abweichung) return { success: false, error: "Abweichung nicht gefunden." };
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const result = await tx.abweichung.updateMany({
+                where: {
+                    id: parsed.data.abweichungId,
+                    bestaetigtAm: null,
+                    inventar: { is: { abgeschlossen: false, archiviert: false } },
+                },
+                data: {
+                    bestaetigtDurchId: user.id,
+                    bestaetigtAm: new Date(),
+                    kommentar: parsed.data.kommentar || undefined,
+                },
+            });
+            if (result.count === 0) return false;
+            await tx.auditTrail.create({
+                data: {
+                    userId: user.id,
+                    aktion: "abweichung_bestaetigt",
+                    entitaet: "abweichung",
+                    referenzId: parsed.data.abweichungId,
+                    inventarId: abweichung.inventarId,
+                    details: JSON.stringify({
+                        primarschluessel: abweichung.primarschluessel,
+                        kommentar: parsed.data.kommentar,
+                    }),
+                },
+            });
+            return true;
+        });
+        if (!updated) {
+            return { success: false, error: "Abweichung ist bereits bestaetigt oder das Inventar ist abgeschlossen." };
+        }
 
         revalidatePath("/abweichungen");
+        revalidatePath(`/inventar/${abweichung.inventarId}/abweichungen`);
         revalidatePath("/");
         return { success: true };
     } catch (error) {
-        console.error("Fehler beim Bestätigen:", error);
+        console.error("Fehler beim Bestätigen:", error instanceof Error ? error.name : "unbekannt");
         return { success: false, error: "Abweichung konnte nicht bestätigt werden" };
     }
 }

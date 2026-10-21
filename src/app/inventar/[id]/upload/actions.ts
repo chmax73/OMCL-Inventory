@@ -8,6 +8,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
+import { canImportIntoInventory } from "@/lib/import-permission";
 import { revalidatePath } from "next/cache";
 // xlsx wird dynamisch importiert um SSR-Fehler zu vermeiden (location is not defined)
 import { WareTyp, BearbStatus, InventarTyp } from "@prisma/client";
@@ -106,6 +108,12 @@ export async function uploadExcel(
     formData: FormData
 ): Promise<UploadResult> {
     try {
+        await requireAdminUser();
+    } catch {
+        return { success: false, error: "Nur angemeldete Admins koennen SOLL-Daten importieren." };
+    }
+
+    try {
         // Inventar prüfen
         const inventar = await prisma.inventar.findUnique({
             where: { id: inventarId },
@@ -115,8 +123,8 @@ export async function uploadExcel(
             return { success: false, error: "Inventar nicht gefunden" };
         }
 
-        if (inventar.abgeschlossen) {
-            return { success: false, error: "Inventar ist bereits abgeschlossen" };
+        if (!canImportIntoInventory(inventar)) {
+            return { success: false, error: "Abgeschlossene oder archivierte Inventare koennen nicht importiert werden." };
         }
 
         const istSubstanzen = inventar.typ === InventarTyp.SUBSTANZEN;
@@ -149,7 +157,6 @@ export async function uploadExcel(
         const firstRowKeys = Object.keys(rawData[0]);
         console.log("[UPLOAD DEBUG] Anzahl Zeilen:", rawData.length);
         console.log("[UPLOAD DEBUG] Spalten:", firstRowKeys);
-        console.log("[UPLOAD DEBUG] Erste Zeile:", JSON.stringify(rawData[0]));
 
         // Daten verarbeiten
         const rows: ExcelRow[] = [];
@@ -330,29 +337,33 @@ export async function uploadExcel(
             };
         }
 
-        // Bestehende SOLL-Waren löschen (falls erneuter Upload)
-        await prisma.wareSoll.deleteMany({
-            where: { inventarId },
-        });
-
-        // Neue SOLL-Waren in Batches einfügen (1000 pro Batch für Performance)
+        // Ersetzen und Batch-Import sind atomar: bei einem Fehler bleiben alte Daten erhalten.
         const BATCH_SIZE = 1000;
-        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-            const batch = rows.slice(i, i + BATCH_SIZE);
-            await prisma.wareSoll.createMany({
-                data: batch.map((row) => ({
-                    inventarId,
-                    primarschluessel: row.primarschluessel,
-                    lagerplatzCode: row.lagerplatzCode,
-                    typ: row.typ,
-                    raum: row.raum,
-                    bezeichnung: row.bezeichnung,
-                    temperatur: row.temperatur,
-                    expDatum: row.expDatum,
-                    bearbStatus: row.bearbStatus,
-                })),
+        await prisma.$transaction(async (tx) => {
+            const current = await tx.inventar.findFirst({
+                where: { id: inventarId, abgeschlossen: false, archiviert: false },
+                select: { id: true },
             });
-        }
+            if (!current) throw new Error("INVENTAR_NICHT_OFFEN");
+
+            await tx.wareSoll.deleteMany({ where: { inventarId } });
+            for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+                const batch = rows.slice(i, i + BATCH_SIZE);
+                await tx.wareSoll.createMany({
+                    data: batch.map((row) => ({
+                        inventarId,
+                        primarschluessel: row.primarschluessel,
+                        lagerplatzCode: row.lagerplatzCode,
+                        typ: row.typ,
+                        raum: row.raum,
+                        bezeichnung: row.bezeichnung,
+                        temperatur: row.temperatur,
+                        expDatum: row.expDatum,
+                        bearbStatus: row.bearbStatus,
+                    })),
+                });
+            }
+        }, { timeout: 120_000 });
 
         const vernichtetCount = rows.filter(r => r.bearbStatus === BearbStatus.vernichtet).length;
 
@@ -370,7 +381,10 @@ export async function uploadExcel(
             debug: debugInfo,
         };
     } catch (error) {
-        console.error("Fehler beim Excel-Upload:", error);
+        if (error instanceof Error && error.message === "INVENTAR_NICHT_OFFEN") {
+            return { success: false, error: "Inventar wurde zwischenzeitlich abgeschlossen oder archiviert." };
+        }
+        console.error("Fehler beim Excel-Upload:", error instanceof Error ? error.name : "unbekannt");
         return {
             success: false,
             error: "Ein unerwarteter Fehler ist aufgetreten"

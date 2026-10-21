@@ -15,7 +15,6 @@ import {
     XCircle,
     Package,
     Search,
-    MessageSquare,
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import {
@@ -47,6 +46,7 @@ export default function AbweichungenPage() {
     const [selectedAbweichung, setSelectedAbweichung] = useState<AbweichungItem | null>(null);
     const [kommentar, setKommentar] = useState("");
     const [isConfirming, setIsConfirming] = useState(false);
+    const [confirmError, setConfirmError] = useState<string | null>(null);
 
     // Daten laden
     useEffect(() => {
@@ -70,24 +70,31 @@ export default function AbweichungenPage() {
 
     // Abweichung bestätigen
     const handleConfirm = async () => {
-        if (!selectedAbweichung || !user) return;
+        if (!selectedAbweichung || user?.rolle !== "admin") return;
 
         setIsConfirming(true);
-        const result = await confirmAbweichung(selectedAbweichung.id, user.id, kommentar || null);
-
-        if (result.success && inventar) {
-            // Daten neu laden
-            const [abw, st] = await Promise.all([
-                getAbweichungen(inventar.id),
-                getAbweichungStats(inventar.id),
-            ]);
-            setAbweichungen(abw);
-            setStats(st);
+        setConfirmError(null);
+        try {
+            const result = await confirmAbweichung(selectedAbweichung.id, kommentar || null);
+            if (!result.success) {
+                setConfirmError(result.error ?? "Abweichung konnte nicht bestaetigt werden.");
+                return;
+            }
+            if (inventar) {
+                const [abw, st] = await Promise.all([
+                    getAbweichungen(inventar.id),
+                    getAbweichungStats(inventar.id),
+                ]);
+                setAbweichungen(abw);
+                setStats(st);
+            }
+            setSelectedAbweichung(null);
+            setKommentar("");
+        } catch {
+            setConfirmError("Verbindung fehlgeschlagen. Bitte spaeter nochmals versuchen.");
+        } finally {
+            setIsConfirming(false);
         }
-
-        setIsConfirming(false);
-        setSelectedAbweichung(null);
-        setKommentar("");
     };
 
     // Gefilterte Abweichungen
@@ -288,7 +295,7 @@ export default function AbweichungenPage() {
                                                     )}
                                                 </td>
                                                 <td>
-                                                    {!a.bestaetigtAm && (
+                                                    {!a.bestaetigtAm && user?.rolle === "admin" && (
                                                         <button
                                                             onClick={() => {
                                                                 setSelectedAbweichung(a);
@@ -312,7 +319,7 @@ export default function AbweichungenPage() {
             </div>
 
             {/* Bestätigungs-Modal */}
-            {selectedAbweichung && (
+            {selectedAbweichung && user?.rolle === "admin" && (
                 <dialog className="modal modal-open">
                     <div className="modal-box">
                         <h3 className="font-bold text-lg mb-4">Abweichung bestätigen</h3>
@@ -334,8 +341,10 @@ export default function AbweichungenPage() {
                                     placeholder="z.B. 'Ware wurde entsorgt' oder 'Bereits korrigiert'"
                                     value={kommentar}
                                     onChange={(e) => setKommentar(e.target.value)}
+                                    maxLength={1000}
                                     rows={3}
                                 />
+                                {confirmError && <p className="text-sm text-error">{confirmError}</p>}
                             </div>
                         </div>
 
