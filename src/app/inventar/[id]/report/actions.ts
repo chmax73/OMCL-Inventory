@@ -7,6 +7,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticatedAppUser } from "@/lib/auth/identity";
 
 // Typ für den Report
 export type ReportData = {
@@ -37,6 +38,8 @@ export type ReportData = {
 
 // Report-Daten laden
 export async function getReportData(inventarId: string): Promise<ReportData | null> {
+    await requireAuthenticatedAppUser();
+
     const inventar = await prisma.inventar.findUnique({
         where: { id: inventarId },
         include: {

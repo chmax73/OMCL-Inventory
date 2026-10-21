@@ -60,6 +60,7 @@ export default function ScanPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user } = useUser();
+    const userId = user?.id;
     const barcodeInputRef = useRef<HTMLInputElement>(null);
     const inventarIdParam = searchParams.get("inventarId") || undefined;
 
@@ -77,22 +78,28 @@ export default function ScanPage() {
 
     // Daten laden
     useEffect(() => {
+        if (!userId) return;
         async function loadData() {
-            const activeInventar = await getActiveInventar(inventarIdParam);
-            setInventar(activeInventar);
+            try {
+                const activeInventar = await getActiveInventar(inventarIdParam);
+                setInventar(activeInventar);
 
-            if (activeInventar) {
-                const plaetze = await getLagerplaetze(activeInventar.id);
-                setLagerplaetze(plaetze);
+                if (activeInventar) {
+                    const plaetze = await getLagerplaetze(activeInventar.id);
+                    setLagerplaetze(plaetze);
+                }
+            } catch (error) {
+                console.error("Scan-Daten konnten nicht geladen werden:", error);
+            } finally {
+                setIsLoading(false);
             }
-
-            setIsLoading(false);
         }
         loadData();
-    }, []);
+    }, [inventarIdParam, userId]);
 
     // SOLL-Waren und Überprüft-Status laden wenn Lagerplatz gewählt
     useEffect(() => {
+        if (!userId) return;
         async function loadSollWaren() {
             if (inventar && selectedLagerplatz) {
                 const waren = await getSollWarenForLagerplatz(inventar.id, selectedLagerplatz);
@@ -105,7 +112,7 @@ export default function ScanPage() {
             }
         }
         loadSollWaren();
-    }, [inventar, selectedLagerplatz]);
+    }, [inventar, selectedLagerplatz, userId]);
 
     // Barcode scannen
     const handleScan = async () => {
@@ -178,6 +185,28 @@ export default function ScanPage() {
             (lp.raum && lp.raum.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    // Nicht angemeldet
+    if (!user) {
+        return (
+            <div className="max-w-md mx-auto mt-12">
+                <div className="card bg-base-200 shadow-xl">
+                    <div className="card-body text-center">
+                        <AlertTriangle className="w-16 h-16 text-warning mx-auto mb-4" />
+                        <h1 className="text-2xl font-bold">Nicht angemeldet</h1>
+                        <p className="text-base-content/70 mt-2">
+                            Bitte melde dich an, um zu scannen.
+                        </p>
+                        <div className="card-actions justify-center mt-4">
+                            <button onClick={() => router.push("/login")} className="btn btn-primary">
+                                Zur Anmeldung
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -198,31 +227,11 @@ export default function ScanPage() {
                             Es gibt kein aktives Inventar zum Scannen.
                         </p>
                         <div className="card-actions justify-center mt-4">
-                            <button onClick={() => router.push("/inventar/neu")} className="btn btn-primary">
-                                Neues Inventar erstellen
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // Nicht angemeldet
-    if (!user) {
-        return (
-            <div className="max-w-md mx-auto mt-12">
-                <div className="card bg-base-200 shadow-xl">
-                    <div className="card-body text-center">
-                        <AlertTriangle className="w-16 h-16 text-warning mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold">Nicht angemeldet</h1>
-                        <p className="text-base-content/70 mt-2">
-                            Bitte melde dich an, um zu scannen.
-                        </p>
-                        <div className="card-actions justify-center mt-4">
-                            <button onClick={() => router.push("/login")} className="btn btn-primary">
-                                Zur Anmeldung
-                            </button>
+                            {user.rolle === "admin" && (
+                                <button onClick={() => router.push("/inventar/neu")} className="btn btn-primary">
+                                    Neues Inventar erstellen
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

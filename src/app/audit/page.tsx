@@ -56,25 +56,34 @@ function getEntitaetLabel(entitaet: string): string {
 export default function AuditPage() {
     const router = useRouter();
     const { user } = useUser();
+    const userRole = user?.rolle;
 
     const [entries, setEntries] = useState<AuditEntry[]>([]);
     const [inventare, setInventare] = useState<{ id: string; label: string }[]>([]);
     const [selectedInventar, setSelectedInventar] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Daten laden
     useEffect(() => {
+        if (userRole !== "admin") return;
         async function loadData() {
-            const [auditEntries, invList] = await Promise.all([
-                getAuditTrail(selectedInventar || undefined),
-                getInventareForFilter(),
-            ]);
-            setEntries(auditEntries);
-            setInventare(invList);
-            setIsLoading(false);
+            try {
+                setLoadError(null);
+                const [auditEntries, invList] = await Promise.all([
+                    getAuditTrail(selectedInventar || undefined),
+                    getInventareForFilter(),
+                ]);
+                setEntries(auditEntries);
+                setInventare(invList);
+            } catch {
+                setLoadError("Audit Trail konnte nicht geladen werden. Bitte Anmeldung und Verbindung pruefen.");
+            } finally {
+                setIsLoading(false);
+            }
         }
         loadData();
-    }, [selectedInventar]);
+    }, [selectedInventar, userRole]);
 
     // Icon basierend auf Aktion
     const getAktionIcon = (aktion: string) => {
@@ -117,9 +126,15 @@ export default function AuditPage() {
         }
     };
 
-    if (!user) {
-        router.push("/login");
-        return null;
+    if (userRole !== "admin") {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Nur Admins koennen den Audit Trail ansehen.
+                <button onClick={() => router.push(user ? "/" : "/login")} className="btn btn-primary">
+                    {user ? "Zum Dashboard" : "Zur Anmeldung"}
+                </button>
+            </div>
+        );
     }
 
     return (
@@ -169,7 +184,9 @@ export default function AuditPage() {
             {/* Audit Trail Liste */}
             <div className="card bg-base-200">
                 <div className="card-body">
-                    {isLoading ? (
+                    {loadError ? (
+                        <div className="alert alert-error">{loadError}</div>
+                    ) : isLoading ? (
                         <div className="flex items-center justify-center py-8">
                             <span className="loading loading-spinner loading-lg text-primary"></span>
                         </div>

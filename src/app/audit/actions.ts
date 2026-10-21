@@ -7,6 +7,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdminUser } from "@/lib/auth/identity";
 
 // Typ für einen Audit-Eintrag
 export type AuditEntry = {
@@ -50,13 +51,16 @@ export async function getAuditTrail(
     inventarId?: string,
     limit: number = 100
 ): Promise<AuditEntry[]> {
+    await requireAdminUser();
+    const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 100) : 100;
+
     const entries = await prisma.auditTrail.findMany({
         where: inventarId ? { inventarId } : undefined,
         include: {
             user: { select: { name: true } },
         },
         orderBy: { timestamp: "desc" },
-        take: limit,
+        take: safeLimit,
     });
 
     return entries.map(e => ({
@@ -72,6 +76,8 @@ export async function getAuditTrail(
 
 // Aktive Inventare für Filter laden
 export async function getInventareForFilter(): Promise<{ id: string; label: string }[]> {
+    await requireAdminUser();
+
     const inventare = await prisma.inventar.findMany({
         orderBy: { erstelltAm: "desc" },
         select: {

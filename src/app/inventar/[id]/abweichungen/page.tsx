@@ -31,6 +31,7 @@ export default function InventarAbweichungenPage() {
     const router = useRouter();
     const params = useParams();
     const { user } = useUser();
+    const userId = user?.id;
     const inventarId = params.id as string;
 
     const [abweichungen, setAbweichungen] = useState<AbweichungItem[]>([]);
@@ -40,6 +41,7 @@ export default function InventarAbweichungenPage() {
         offen: number;
     } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTyp, setFilterTyp] = useState<AbweichungTyp | "alle">("alle");
     const [filterStatus, setFilterStatus] = useState<"alle" | "offen" | "bestaetigt">("alle");
@@ -52,17 +54,23 @@ export default function InventarAbweichungenPage() {
 
     // Daten laden
     useEffect(() => {
+        if (!userId) return;
         async function loadData() {
-            const [abw, st] = await Promise.all([
-                getAbweichungen(inventarId),
-                getAbweichungStats(inventarId),
-            ]);
-            setAbweichungen(abw);
-            setStats(st);
-            setIsLoading(false);
+            try {
+                const [abw, st] = await Promise.all([
+                    getAbweichungen(inventarId),
+                    getAbweichungStats(inventarId),
+                ]);
+                setAbweichungen(abw);
+                setStats(st);
+            } catch {
+                setLoadError("Abweichungen konnten nicht geladen werden. Bitte Anmeldung und Verbindung pruefen.");
+            } finally {
+                setIsLoading(false);
+            }
         }
         loadData();
-    }, [inventarId]);
+    }, [inventarId, userId]);
 
     // Abweichung bestätigen
     const handleConfirm = async () => {
@@ -121,6 +129,15 @@ export default function InventarAbweichungenPage() {
         }
     };
 
+    if (!user) {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Bitte melde dich an, um Abweichungen anzusehen.
+                <button onClick={() => router.push("/login")} className="btn btn-primary">Zur Anmeldung</button>
+            </div>
+        );
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -129,9 +146,8 @@ export default function InventarAbweichungenPage() {
         );
     }
 
-    if (!user) {
-        router.push("/login");
-        return null;
+    if (loadError) {
+        return <div className="alert alert-error mx-auto mt-12 max-w-lg">{loadError}</div>;
     }
 
     return (

@@ -10,19 +10,14 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { config } from "dotenv";
 import path from "path";
+import { getPostgresPoolConfig } from "../src/lib/postgres-pool";
 
 // Lade Umgebungsvariablen aus .env.local
 config({ path: path.resolve(process.cwd(), ".env.local") });
 config({ path: path.resolve(process.cwd(), ".env") });
 
-// Supabase verwendet selbstsignierte Zertifikate → TLS-Verification deaktivieren
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
 // Prisma 7: Driver Adapter für PostgreSQL mit SSL
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(getPostgresPoolConfig(process.env.DATABASE_URL, process.env.SUPABASE_DB_CA_CERT));
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

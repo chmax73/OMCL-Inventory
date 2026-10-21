@@ -40,14 +40,19 @@ export default function UploadPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [result, setResult] = useState<UploadResult | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Inventar-Infos laden
     useEffect(() => {
         if (user?.rolle !== "admin") return;
         async function loadInfo() {
-            const info = await getInventarInfo(inventarId);
-            setInventarInfo(info);
-            setIsLoading(false);
+            try {
+                setInventarInfo(await getInventarInfo(inventarId));
+            } catch {
+                setLoadError("Inventar-Infos konnten nicht geladen werden. Bitte Anmeldung und Verbindung pruefen.");
+            } finally {
+                setIsLoading(false);
+            }
         }
         loadInfo();
     }, [inventarId, user?.rolle]);
@@ -118,6 +123,10 @@ export default function UploadPage() {
                 <span className="loading loading-spinner loading-lg text-primary"></span>
             </div>
         );
+    }
+
+    if (loadError) {
+        return <div className="alert alert-error mx-auto mt-12 max-w-lg">{loadError}</div>;
     }
 
     if (!inventarInfo) {

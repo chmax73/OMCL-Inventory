@@ -8,7 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdminUser } from "@/lib/auth/identity";
+import { requireAdminUser, requireAuthenticatedAppUser } from "@/lib/auth/identity";
 import { revalidatePath } from "next/cache";
 import { InventarTyp } from "@prisma/client";
 
@@ -34,6 +34,8 @@ export type InventarListItem = {
 
 // Dashboard-Statistiken laden
 export async function getDashboardStats(): Promise<DashboardStats> {
+    await requireAuthenticatedAppUser();
+
     // Heute um Mitternacht für "heute gescannt" Abfrage
     const heute = new Date();
     heute.setHours(0, 0, 0, 0);
@@ -75,6 +77,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 // Aktuelle Inventare laden (nicht archivierte), optional nach Typ filtern
 export async function getInventarList(typ?: InventarTyp): Promise<InventarListItem[]> {
+    await requireAuthenticatedAppUser();
+
     const inventare = await prisma.inventar.findMany({
         where: { archiviert: false, ...(typ ? { typ } : {}) },
         include: {
@@ -106,6 +110,8 @@ export async function getInventarList(typ?: InventarTyp): Promise<InventarListIt
 
 // Archivierte Inventare laden
 export async function getArchivedInventarList(): Promise<InventarListItem[]> {
+    await requireAuthenticatedAppUser();
+
     const inventare = await prisma.inventar.findMany({
         where: { archiviert: true },
         include: {

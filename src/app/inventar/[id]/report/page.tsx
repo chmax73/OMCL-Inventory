@@ -24,20 +24,36 @@ export default function ReportPage() {
     const router = useRouter();
     const params = useParams();
     const { user } = useUser();
+    const userId = user?.id;
     const inventarId = params.id as string;
 
     const [reportData, setReportData] = useState<ReportData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Daten laden
     useEffect(() => {
+        if (!userId) return;
         async function loadData() {
-            const data = await getReportData(inventarId);
-            setReportData(data);
-            setIsLoading(false);
+            try {
+                setReportData(await getReportData(inventarId));
+            } catch {
+                setLoadError("Report konnte nicht geladen werden. Bitte Anmeldung und Verbindung pruefen.");
+            } finally {
+                setIsLoading(false);
+            }
         }
         loadData();
-    }, [inventarId]);
+    }, [inventarId, userId]);
+
+    if (!user) {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Bitte melde dich an, um den Inventar-Report anzusehen.
+                <button onClick={() => router.push("/login")} className="btn btn-primary">Zur Anmeldung</button>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -47,9 +63,8 @@ export default function ReportPage() {
         );
     }
 
-    if (!user) {
-        router.push("/login");
-        return null;
+    if (loadError) {
+        return <div className="alert alert-error mx-auto mt-12 max-w-lg">{loadError}</div>;
     }
 
     if (!reportData) {

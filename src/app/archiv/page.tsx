@@ -9,10 +9,16 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Archive, FileText, ListChecks, ArrowLeft, CheckCircle, Package, FlaskConical } from "lucide-react";
 import { getArchivedInventarList } from "@/app/actions";
+import { getVerifiedIdentity } from "@/lib/auth/identity";
 
 export default async function ArchivPage() {
+    const identity = await getVerifiedIdentity();
+    if (identity?.mustChangePassword) redirect("/auth/password");
+    if (!identity?.appUser) redirect("/auth/login");
+
     const inventare = await getArchivedInventarList();
 
     return (

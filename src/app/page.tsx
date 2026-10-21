@@ -11,6 +11,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ClipboardPlus, ScanBarcode, AlertTriangle, CheckCircle, Lock, FileText, ListChecks, Archive, FlaskConical, Package } from "lucide-react";
 import { getDashboardStats, getInventarList, type InventarListItem } from "./actions";
 import ArchiveButton from "@/components/ArchiveButton";
@@ -122,6 +123,8 @@ function InventarTabelle({ inventare, neuLink, label, canCreate }: {
 
 export default async function Dashboard() {
   const identity = await getVerifiedIdentity();
+  if (identity?.mustChangePassword) redirect("/auth/password");
+  if (!identity?.appUser) redirect("/auth/login");
   const canCreate = identity?.appUser?.rolle === "admin";
 
   // Daten parallel aus der Datenbank laden (Muster + Substanzen getrennt)

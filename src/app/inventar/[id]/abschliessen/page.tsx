@@ -36,9 +36,13 @@ export default function AbschliessenPage() {
     useEffect(() => {
         if (user?.rolle !== "admin") return;
         async function loadStatus() {
-            const s = await getAbschlussStatus(inventarId);
-            setStatus(s);
-            setIsLoading(false);
+            try {
+                setStatus(await getAbschlussStatus(inventarId));
+            } catch {
+                setError("Abschluss-Status konnte nicht geladen werden. Bitte Anmeldung und Verbindung pruefen.");
+            } finally {
+                setIsLoading(false);
+            }
         }
         loadStatus();
     }, [inventarId, user?.rolle]);
@@ -79,6 +83,10 @@ export default function AbschliessenPage() {
                 <span className="loading loading-spinner loading-lg text-primary"></span>
             </div>
         );
+    }
+
+    if (error && !status) {
+        return <div className="alert alert-error mx-auto mt-12 max-w-lg">{error}</div>;
     }
 
     if (!status) {

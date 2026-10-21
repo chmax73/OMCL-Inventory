@@ -27,6 +27,8 @@ export type AbschlussStatus = {
 
 // Prüfen ob Inventar abgeschlossen werden kann
 export async function getAbschlussStatus(inventarId: string): Promise<AbschlussStatus> {
+    await requireAdminUser();
+
     // Statistiken laden
     const [sollWaren, istScans, abweichungen, lagerplaetzeUeberprueft] = await Promise.all([
         prisma.wareSoll.count({ where: { inventarId } }),

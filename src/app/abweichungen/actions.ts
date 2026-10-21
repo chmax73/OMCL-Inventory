@@ -8,7 +8,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdminUser } from "@/lib/auth/identity";
+import { requireAdminUser, requireAuthenticatedAppUser } from "@/lib/auth/identity";
 import { confirmAbweichungSchema } from "@/lib/abweichung-validation";
 import { revalidatePath } from "next/cache";
 import { AbweichungTyp } from "@prisma/client";
@@ -27,6 +27,8 @@ export type AbweichungItem = {
 
 // Alle Abweichungen für ein Inventar laden
 export async function getAbweichungen(inventarId: string): Promise<AbweichungItem[]> {
+    await requireAuthenticatedAppUser();
+
     const abweichungen = await prisma.abweichung.findMany({
         where: { inventarId },
         include: {
@@ -149,6 +151,8 @@ export async function getAbweichungStats(inventarId: string): Promise<{
     offen: number;
     nachTyp: { typ: AbweichungTyp; count: number }[];
 }> {
+    await requireAuthenticatedAppUser();
+
     const abweichungen = await prisma.abweichung.findMany({
         where: { inventarId },
         select: {

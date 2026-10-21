@@ -11,9 +11,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-
-// Supabase verwendet selbstsignierte Zertifikate → TLS-Verification deaktivieren
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+import { getPostgresPoolConfig } from "./postgres-pool";
 
 // Globale Variable für den Prisma Client (nur in Development)
 const globalForPrisma = globalThis as unknown as {
@@ -21,13 +19,10 @@ const globalForPrisma = globalThis as unknown as {
   pool: Pool | undefined;
 };
 
-// Erstelle Pool mit SSL-Konfiguration für Supabase
-// rejectUnauthorized: false ist nötig wegen selbstsignierter Zertifikate
-const pool = globalForPrisma.pool ?? new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 1
-} as unknown as { connectionString?: string; ssl?: { rejectUnauthorized?: boolean } | boolean; max?: number });
+// Nur Postgres benoetigt die DB-spezifische SSL-Konfiguration.
+const pool = globalForPrisma.pool ?? new Pool(
+  getPostgresPoolConfig(process.env.DATABASE_URL, process.env.SUPABASE_DB_CA_CERT)
+);
 
 // Speichere Pool global um Connection-Leaks zu vermeiden
 if (process.env.NODE_ENV !== "production") {

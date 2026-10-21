@@ -8,16 +8,6 @@ import { prisma } from "../lib/prisma";
 import { isSameSupabaseProject } from "../lib/auth/project-match";
 import { createUserSchema } from "../lib/user-management-validation";
 
-async function withDatabaseTls<T>(operation: () => Promise<T>): Promise<T> {
-    // Die bestehende DB-Verbindung braucht diese Ausnahme; HTTPS zur Auth-API nicht.
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    try {
-        return await operation();
-    } finally {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
-    }
-}
-
 async function main() {
     const args = process.argv.slice(2);
     if (args.length === 0 || args.includes("--help")) {
@@ -60,14 +50,10 @@ async function main() {
         return;
     }
 
-    // Der bestehende Prisma-Singleton setzt TLS global aus. Nur DB-Operationen
-    // bekommen diese Ausnahme; Auth-API-Aufrufe pruefen HTTPS-Zertifikate.
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
-
-    const existing = await withDatabaseTls(() => prisma.user.findFirst({
+    const existing = await prisma.user.findFirst({
         where: { name: input.data.email, rolle: "admin" },
         select: { id: true },
-    }));
+    });
     if (existing) throw new Error("Fuer diese E-Mail existiert bereits ein Admin-Konto in der Inventur.");
 
     const supabase = createClient(authUrl, serviceRoleKey, {
@@ -84,9 +70,9 @@ async function main() {
     }
 
     try {
-        await withDatabaseTls(() => prisma.user.create({
+        await prisma.user.create({
             data: { id: data.user.id, name: input.data.email, rolle: "admin" },
-        }));
+        });
     } catch {
         throw new Error(
             "Auth-Konto wurde erstellt, aber die Inventur-Rolle fehlt. Nicht nochmals starten; zuerst die Verknuepfung pruefen.",

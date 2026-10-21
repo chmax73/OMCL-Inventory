@@ -52,13 +52,15 @@ export type ScanResult = {
 
 // Inventar laden (per ID oder erstes offenes)
 export async function getActiveInventar(inventarId?: string): Promise<ActiveInventar | null> {
+    await requireAuthenticatedAppUser();
+
     const inventar = inventarId
-        ? await prisma.inventar.findUnique({
-            where: { id: inventarId },
+        ? await prisma.inventar.findFirst({
+            where: { id: inventarId, abgeschlossen: false, archiviert: false },
             include: { _count: { select: { sollWaren: true } } },
         })
         : await prisma.inventar.findFirst({
-            where: { abgeschlossen: false },
+            where: { abgeschlossen: false, archiviert: false },
             include: { _count: { select: { sollWaren: true } } },
         });
 
@@ -83,6 +85,8 @@ export async function getActiveInventar(inventarId?: string): Promise<ActiveInve
 
 // Alle Lagerplätze mit Statistik laden
 export async function getLagerplaetze(inventarId: string): Promise<LagerplatzInfo[]> {
+    await requireAuthenticatedAppUser();
+
     // Alle SOLL-Waren gruppiert nach Lagerplatz (ohne vernichtete)
     const sollWaren = await prisma.wareSoll.findMany({
         where: {
@@ -151,6 +155,8 @@ export async function getSollWarenForLagerplatz(
     inventarId: string,
     lagerplatzCode: string
 ): Promise<SollWare[]> {
+    await requireAuthenticatedAppUser();
+
     // Nur nicht-vernichtete SOLL-Waren laden
     const sollWaren = await prisma.wareSoll.findMany({
         where: {
@@ -477,6 +483,8 @@ export async function isLagerplatzUeberprueft(
     inventarId: string,
     lagerplatzCode: string
 ): Promise<boolean> {
+    await requireAuthenticatedAppUser();
+
     const result = await prisma.lagerplatzUeberprueft.findUnique({
         where: {
             inventarId_lagerplatzCode: {

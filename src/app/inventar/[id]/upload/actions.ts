@@ -394,6 +394,8 @@ export async function uploadExcel(
 
 // Inventar-Infos für die Upload-Seite laden
 export async function getInventarInfo(inventarId: string) {
+    await requireAdminUser();
+
     const inventar = await prisma.inventar.findUnique({
         where: { id: inventarId },
         include: {

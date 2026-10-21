@@ -29,6 +29,7 @@ import { AbweichungTyp } from "@prisma/client";
 export default function AbweichungenPage() {
     const router = useRouter();
     const { user } = useUser();
+    const userId = user?.id;
 
     const [inventar, setInventar] = useState<ActiveInventar | null>(null);
     const [abweichungen, setAbweichungen] = useState<AbweichungItem[]>([]);
@@ -50,23 +51,28 @@ export default function AbweichungenPage() {
 
     // Daten laden
     useEffect(() => {
+        if (!userId) return;
         async function loadData() {
-            const activeInventar = await getActiveInventar();
-            setInventar(activeInventar);
+            try {
+                const activeInventar = await getActiveInventar();
+                setInventar(activeInventar);
 
-            if (activeInventar) {
-                const [abw, st] = await Promise.all([
-                    getAbweichungen(activeInventar.id),
-                    getAbweichungStats(activeInventar.id),
-                ]);
-                setAbweichungen(abw);
-                setStats(st);
+                if (activeInventar) {
+                    const [abw, st] = await Promise.all([
+                        getAbweichungen(activeInventar.id),
+                        getAbweichungStats(activeInventar.id),
+                    ]);
+                    setAbweichungen(abw);
+                    setStats(st);
+                }
+            } catch (error) {
+                console.error("Abweichungen konnten nicht geladen werden:", error);
+            } finally {
+                setIsLoading(false);
             }
-
-            setIsLoading(false);
         }
         loadData();
-    }, []);
+    }, [userId]);
 
     // Abweichung bestätigen
     const handleConfirm = async () => {
@@ -139,17 +145,21 @@ export default function AbweichungenPage() {
         }
     };
 
+    if (!user) {
+        return (
+            <div className="alert alert-warning mx-auto mt-12 max-w-lg">
+                Bitte melde dich an, um Abweichungen anzusehen.
+                <button onClick={() => router.push("/login")} className="btn btn-primary">Zur Anmeldung</button>
+            </div>
+        );
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
                 <span className="loading loading-spinner loading-lg text-primary"></span>
             </div>
         );
-    }
-
-    if (!user) {
-        router.push("/login");
-        return null;
     }
 
     if (!inventar) {
@@ -160,12 +170,11 @@ export default function AbweichungenPage() {
                 <p className="text-base-content/70 mb-4">
                     Es muss zuerst ein Inventar erstellt werden.
                 </p>
-                <button
-                    onClick={() => router.push("/inventar/neu")}
-                    className="btn btn-primary"
-                >
-                    Neues Inventar erstellen
-                </button>
+                {user.rolle === "admin" && (
+                    <button onClick={() => router.push("/inventar/neu")} className="btn btn-primary">
+                        Neues Inventar erstellen
+                    </button>
+                )}
             </div>
         );
     }

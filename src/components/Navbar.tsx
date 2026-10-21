@@ -103,7 +103,9 @@ export default function Navbar() {
     // usePathname gibt den aktuellen Pfad zurück (z.B. "/scan")
     const pathname = usePathname();
     const { user } = useUser();
-    const visibleLinks = navLinks.filter((link) => link.href !== "/inventar/neu" || user?.rolle === "admin");
+    const visibleLinks = navLinks.filter((link) =>
+        !["/inventar/neu", "/audit"].includes(link.href) || user?.rolle === "admin"
+    );
 
     return (
         <div className="navbar bg-base-200 shadow-md">
