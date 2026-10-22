@@ -62,6 +62,8 @@ export default function ScanPage() {
     const { user } = useUser();
     const userId = user?.id;
     const barcodeInputRef = useRef<HTMLInputElement>(null);
+    const scanInFlightRef = useRef(false);
+    const refreshVersionRef = useRef(0);
     const inventarIdParam = searchParams.get("inventarId") || undefined;
 
     const [inventar, setInventar] = useState<ActiveInventar | null>(null);
@@ -99,48 +101,70 @@ export default function ScanPage() {
 
     // SOLL-Waren und Überprüft-Status laden wenn Lagerplatz gewählt
     useEffect(() => {
-        if (!userId) return;
+        const requestVersion = ++refreshVersionRef.current;
+        if (!userId || !inventar || !selectedLagerplatz) return;
+        const inventarId = inventar.id;
+        const lagerplatzCode = selectedLagerplatz;
+
         async function loadSollWaren() {
-            if (inventar && selectedLagerplatz) {
-                const waren = await getSollWarenForLagerplatz(inventar.id, selectedLagerplatz);
+            try {
+                const [waren, ueberprueft] = await Promise.all([
+                    getSollWarenForLagerplatz(inventarId, lagerplatzCode),
+                    isLagerplatzUeberprueft(inventarId, lagerplatzCode),
+                ]);
+                if (requestVersion !== refreshVersionRef.current) return;
                 setSollWaren(waren);
-                // Überprüft-Status laden
-                const ueberprueft = await isLagerplatzUeberprueft(inventar.id, selectedLagerplatz);
                 setIsUeberprueft(ueberprueft);
-                // Fokus auf Barcode-Input
-                setTimeout(() => barcodeInputRef.current?.focus(), 100);
+            } catch (error) {
+                console.error("Lagerplatz konnte nicht geladen werden:", error instanceof Error ? error.name : "unbekannt");
             }
         }
         loadSollWaren();
     }, [inventar, selectedLagerplatz, userId]);
 
+    // Erst nach dem Rendern des wieder beschreibbaren Feldes fokussieren.
+    useEffect(() => {
+        if (selectedLagerplatz && !isScanning && !isUeberprueft) {
+            barcodeInputRef.current?.focus();
+        }
+    }, [selectedLagerplatz, isScanning, isUeberprueft]);
+
     // Barcode scannen
     const handleScan = async () => {
-        if (!barcode.trim() || !inventar || !selectedLagerplatz || !user) return;
-
+        if (!barcode.trim() || !inventar || !selectedLagerplatz || !user || scanInFlightRef.current) return;
+        const scannedBarcode = barcode.trim();
+        const lagerplatzCode = selectedLagerplatz;
+        const inventarId = inventar.id;
+        scanInFlightRef.current = true;
         setIsScanning(true);
-        const result = await scanBarcode(inventar.id, selectedLagerplatz, barcode.trim());
-        setLastScanResult(result);
+        try {
+            const result = await scanBarcode(inventarId, lagerplatzCode, scannedBarcode);
+            setLastScanResult(result);
 
-        if (result.success) {
-            // Fehler-Ton bei Problemen (vernichtet, neu, falsch)
-            if (result.scanTyp && result.scanTyp !== "ok") {
+            if (result.success) {
+                if (result.scanTyp && result.scanTyp !== "ok") playErrorBeep();
+                const requestVersion = ++refreshVersionRef.current;
+                void Promise.all([
+                    getSollWarenForLagerplatz(inventarId, lagerplatzCode),
+                    getLagerplaetze(inventarId),
+                ]).then(([waren, plaetze]) => {
+                    if (requestVersion !== refreshVersionRef.current) return;
+                    setSollWaren(waren);
+                    setLagerplaetze(plaetze);
+                }).catch((error: unknown) => {
+                    console.error("Scan-Ansicht konnte nicht aktualisiert werden:", error instanceof Error ? error.name : "unbekannt");
+                });
+            } else {
                 playErrorBeep();
             }
-            // SOLL-Waren aktualisieren
-            const waren = await getSollWarenForLagerplatz(inventar.id, selectedLagerplatz);
-            setSollWaren(waren);
-            // Lagerplätze aktualisieren
-            const plaetze = await getLagerplaetze(inventar.id);
-            setLagerplaetze(plaetze);
-        } else {
-            // Fehler-Ton bei fehlgeschlagenem Scan
+        } catch {
+            setLastScanResult({ success: false, error: "Scan fehlgeschlagen. Bitte Verbindung pruefen und erneut versuchen." });
             playErrorBeep();
+        } finally {
+            setBarcode("");
+            scanInFlightRef.current = false;
+            setIsScanning(false);
         }
-
-        setBarcode("");
-        setIsScanning(false);
-        barcodeInputRef.current?.focus();
     };
 
     // Enter-Taste zum Scannen
@@ -398,8 +422,7 @@ export default function ScanPage() {
                             value={barcode}
                             onChange={(e) => setBarcode(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            disabled={isScanning}
-                            autoFocus
+                            readOnly={isScanning}
                         />
                         <button
                             onClick={handleScan}

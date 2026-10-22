@@ -356,10 +356,8 @@ export async function scanBarcode(
             });
         }
 
-        // Cache invalidieren
-        revalidatePath("/scan");
+        // Dashboard-Zaehler aktuell halten, ohne die laufende Scan-Seite neu zu laden.
         revalidatePath("/");
-
         return { success: true, scanTyp, message };
     } catch (error) {
         console.error("Fehler beim Scannen:", error);
