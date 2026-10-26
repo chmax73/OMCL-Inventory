@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { getUppercaseBarcodeSuggestion } from "@/lib/barcode-validation";
+import { getScannedCountFromLagerplaetze } from "@/lib/scan-overview-progress";
 import {
     getActiveInventar,
     getLagerplaetze,
@@ -65,6 +66,7 @@ export default function ScanPage() {
     const barcodeInputRef = useRef<HTMLInputElement>(null);
     const scanInFlightRef = useRef(false);
     const refreshVersionRef = useRef(0);
+    const returnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const inventarIdParam = searchParams.get("inventarId") || undefined;
 
     const [inventar, setInventar] = useState<ActiveInventar | null>(null);
@@ -78,6 +80,11 @@ export default function ScanPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [isUeberprueft, setIsUeberprueft] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
+    const [isReturningToOverview, setIsReturningToOverview] = useState(false);
+
+    useEffect(() => () => {
+        if (returnTimerRef.current) clearTimeout(returnTimerRef.current);
+    }, []);
 
     // Daten laden
     useEffect(() => {
@@ -132,7 +139,7 @@ export default function ScanPage() {
 
     // Barcode scannen
     const handleScan = async () => {
-        if (!barcode.trim() || !inventar || !selectedLagerplatz || !user || scanInFlightRef.current) return;
+        if (!barcode.trim() || !inventar || !selectedLagerplatz || !user || scanInFlightRef.current || isReturningToOverview) return;
         let scannedBarcode = barcode.trim();
         const suggestion = getUppercaseBarcodeSuggestion(scannedBarcode, inventar.typ);
         if (suggestion) {
@@ -192,9 +199,40 @@ export default function ScanPage() {
     // State für Anzahl fehlender Waren
     const [fehlendeWarenCount, setFehlendeWarenCount] = useState<number | null>(null);
 
+    const returnToOverview = async () => {
+        if (!inventar || scanInFlightRef.current || isReturningToOverview) return;
+        const requestVersion = ++refreshVersionRef.current;
+        setIsReturningToOverview(true);
+        try {
+            const [aktuellesInventar, plaetze] = await Promise.all([
+                getActiveInventar(inventar.id),
+                getLagerplaetze(inventar.id),
+            ]);
+            if (requestVersion !== refreshVersionRef.current) return;
+            setInventar(aktuellesInventar);
+            setLagerplaetze(plaetze);
+            setSelectedLagerplatz(null);
+            setIsUeberprueft(false);
+            setFehlendeWarenCount(null);
+        } catch (error) {
+            console.error("Lagerplatz-Übersicht konnte nicht aktualisiert werden:", error);
+            setLastScanResult({ success: false, error: "Übersicht konnte nicht aktualisiert werden. Bitte Seite neu laden." });
+        } finally {
+            setIsReturningToOverview(false);
+        }
+    };
+
+    const handleBackToOverview = () => {
+        if (returnTimerRef.current) {
+            clearTimeout(returnTimerRef.current);
+            returnTimerRef.current = null;
+        }
+        void returnToOverview();
+    };
+
     // Lagerplatz als überprüft markieren
     const handleConfirmLagerplatz = async () => {
-        if (!inventar || !selectedLagerplatz || !user) return;
+        if (!inventar || !selectedLagerplatz || !user || scanInFlightRef.current || isReturningToOverview) return;
 
         setIsConfirming(true);
         const result = await confirmLagerplatz(inventar.id, selectedLagerplatz);
@@ -203,23 +241,9 @@ export default function ScanPage() {
             setIsUeberprueft(true);
             setFehlendeWarenCount(result.fehlendeWaren || 0);
             // Zurück zur Lagerplatz-Auswahl nach längerem Timeout wenn Abweichungen
-            setTimeout(async () => {
-                try {
-                    // Auch den Gesamtzähler aktualisieren, bevor die Übersicht erscheint.
-                    const [aktuellesInventar, plaetze] = await Promise.all([
-                        getActiveInventar(inventar.id),
-                        getLagerplaetze(inventar.id),
-                    ]);
-                    ++refreshVersionRef.current;
-                    setInventar(aktuellesInventar);
-                    setLagerplaetze(plaetze);
-                    setSelectedLagerplatz(null);
-                    setIsUeberprueft(false);
-                    setFehlendeWarenCount(null);
-                } catch (error) {
-                    console.error("Lagerplatz-Übersicht konnte nicht aktualisiert werden:", error);
-                    setLastScanResult({ success: false, error: "Übersicht konnte nicht aktualisiert werden. Bitte Seite neu laden." });
-                }
+            returnTimerRef.current = setTimeout(() => {
+                returnTimerRef.current = null;
+                void returnToOverview();
             }, result.fehlendeWaren && result.fehlendeWaren > 0 ? 3000 : 1500);
         }
 
@@ -295,7 +319,7 @@ export default function ScanPage() {
                     <h1 className="text-3xl font-bold">Lagerplatz wählen</h1>
                     <div className="badge badge-lg badge-primary gap-2">
                         <Package className="w-4 h-4" />
-                        {inventar.istWarenCount} / {inventar.sollWarenCount} gescannt
+                        {getScannedCountFromLagerplaetze(lagerplaetze)} / {inventar.sollWarenCount} gescannt
                     </div>
                 </div>
 
@@ -416,7 +440,7 @@ export default function ScanPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedLagerplatz(null)} className="btn btn-ghost btn-sm">
+                    <button onClick={handleBackToOverview} disabled={isScanning || isReturningToOverview} className="btn btn-ghost btn-sm">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
@@ -446,11 +470,11 @@ export default function ScanPage() {
                             value={barcode}
                             onChange={(e) => setBarcode(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            readOnly={isScanning}
+                            readOnly={isScanning || isReturningToOverview}
                         />
                         <button
                             onClick={handleScan}
-                            disabled={!barcode.trim() || isScanning}
+                            disabled={!barcode.trim() || isScanning || isReturningToOverview}
                             className="btn btn-primary btn-lg"
                         >
                             {isScanning ? (
@@ -580,7 +604,7 @@ export default function ScanPage() {
                         ) : (
                             <button
                                 onClick={handleConfirmLagerplatz}
-                                disabled={isConfirming}
+                                disabled={isConfirming || isScanning || isReturningToOverview}
                                 className="btn btn-success btn-lg gap-2"
                             >
                                 {isConfirming ? (
