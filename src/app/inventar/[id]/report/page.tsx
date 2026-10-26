@@ -219,6 +219,7 @@ export default function ReportPage() {
                             <table className="table table-sm">
                                 <thead>
                                     <tr>
+                                        <th>Status</th>
                                         <th>Typ</th>
                                         <th>Barcode</th>
                                         <th>Bezeichnung</th>
@@ -229,6 +230,7 @@ export default function ReportPage() {
                                 <tbody>
                                     {reportData.abweichungen.map((a, i) => (
                                         <tr key={i}>
+                                            <td>{a.status === "bestaetigt" ? "Bestätigt" : a.status === "verworfen" ? "Verworfen" : "Offen"}</td>
                                             <td>
                                                 <span className={`badge ${getTypColor(a.typ)} badge-sm whitespace-nowrap`}>
                                                     {getTypLabel(a.typ)}

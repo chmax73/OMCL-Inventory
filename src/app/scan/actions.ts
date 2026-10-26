@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedAppUser } from "@/lib/auth/identity";
+import { isValidBarcode } from "@/lib/barcode-validation";
 import { OK_SCAN_WHERE, SCANNABLE_SOLL_WHERE } from "@/lib/inventory-progress";
 import { revalidatePath } from "next/cache";
 import { ScanTyp, BearbStatus, InventarTyp } from "@prisma/client";
@@ -212,16 +213,6 @@ export async function getSollWarenForLagerplatz(
     }
 
     return result;
-}
-
-// Barcode-Format validieren, abhängig vom Inventar-Typ
-function isValidBarcode(barcode: string, inventarTyp: InventarTyp): boolean {
-    if (inventarTyp === InventarTyp.SUBSTANZEN) {
-        // Substanz-Format: S-xxxx oder S-xxxx-xxx (x = Ziffer)
-        return /^S-\d{4}(-\d{3})?$/i.test(barcode);
-    }
-    // Muster-Format: M- gefolgt von 6 Ziffern (z.B. M-022272)
-    return /^M-\d{6}$/i.test(barcode);
 }
 
 // Barcode scannen und IST-Eintrag erstellen

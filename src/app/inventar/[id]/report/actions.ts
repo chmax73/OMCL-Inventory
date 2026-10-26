@@ -32,6 +32,7 @@ export type ReportData = {
         bezeichnung: string | null;
         lagerplatzCode: string | null;
         kommentar: string | null;
+        status: string;
         bestaetigtDurch: string | null;
     }[];
 };
@@ -107,6 +108,7 @@ export async function getReportData(inventarId: string): Promise<ReportData | nu
                 bezeichnung: soll?.bezeichnung || null,
                 lagerplatzCode: soll?.lagerplatzCode || ist?.lagerplatzCode || null,
                 kommentar: a.kommentar,
+                status: a.status,
                 bestaetigtDurch: a.bestaetigtDurch?.name || null,
             };
         }),

@@ -36,7 +36,7 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
         prisma.wareIst.count({ where: { inventarId, ...OK_SCAN_WHERE } }),
         prisma.abweichung.findMany({
             where: { inventarId },
-            select: { bestaetigtAm: true },
+            select: { status: true },
         }),
         prisma.lagerplatzUeberprueft.count({ where: { inventarId } }),
     ]);
@@ -50,7 +50,7 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
     const lagerplaetzeTotal = lagerplaetze.length;
 
     const abweichungenTotal = abweichungen.length;
-    const abweichungenOffen = abweichungen.filter(a => a.bestaetigtAm === null).length;
+    const abweichungenOffen = abweichungen.filter(a => a.status === "offen").length;
 
     const stats = {
         sollWaren,
@@ -69,7 +69,7 @@ export async function getAbschlussStatus(inventarId: string): Promise<AbschlussS
     }
 
     if (abweichungenOffen > 0) {
-        reasons.push(`${abweichungenOffen} Abweichungen sind noch nicht bestätigt`);
+        reasons.push(`${abweichungenOffen} Abweichungen sind noch offen`);
     }
 
     return {

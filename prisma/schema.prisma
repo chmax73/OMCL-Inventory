@@ -57,6 +57,13 @@ enum AbweichungTyp {
   neu     // Ware gescannt, aber nicht im SOLL
 }
 
+// Entscheidung ueber eine Abweichung; Wiedereroeffnen setzt sie auf offen.
+enum AbweichungStatus {
+  offen
+  bestaetigt
+  verworfen
+}
+
 // -----------------------------------------------------------------------------
 // TABELLEN
 // -----------------------------------------------------------------------------
@@ -144,6 +151,7 @@ model Abweichung {
   inventarId      String        @map("inventar_id")
   primarschluessel String       // Betroffener Barcode
   typ             AbweichungTyp
+  status          AbweichungStatus @default(offen)
   kommentar       String?
   bestaetigtDurchId String?     @map("bestaetigt_durch")
   bestaetigtAm    DateTime?     @map("bestaetigt_am")

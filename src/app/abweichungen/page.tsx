@@ -21,10 +21,12 @@ import {
     getAbweichungen,
     getAbweichungStats,
     confirmAbweichung,
+    discardAbweichung,
+    reopenAbweichung,
     type AbweichungItem,
 } from "./actions";
 import { getActiveInventar, type ActiveInventar } from "../scan/actions";
-import { AbweichungTyp } from "@prisma/client";
+import { AbweichungStatus, AbweichungTyp } from "@prisma/client";
 
 export default function AbweichungenPage() {
     const router = useRouter();
@@ -36,18 +38,21 @@ export default function AbweichungenPage() {
     const [stats, setStats] = useState<{
         total: number;
         bestaetigt: number;
+        verworfen: number;
         offen: number;
     } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTyp, setFilterTyp] = useState<AbweichungTyp | "alle">("alle");
-    const [filterStatus, setFilterStatus] = useState<"alle" | "offen" | "bestaetigt">("alle");
+    const [filterStatus, setFilterStatus] = useState<AbweichungStatus | "alle">("alle");
 
     // Modal State
     const [selectedAbweichung, setSelectedAbweichung] = useState<AbweichungItem | null>(null);
+    const [selectedAction, setSelectedAction] = useState<"bestaetigt" | "verworfen">("bestaetigt");
     const [kommentar, setKommentar] = useState("");
     const [isConfirming, setIsConfirming] = useState(false);
     const [confirmError, setConfirmError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     // Daten laden
     useEffect(() => {
@@ -74,16 +79,18 @@ export default function AbweichungenPage() {
         loadData();
     }, [userId]);
 
-    // Abweichung bestätigen
-    const handleConfirm = async () => {
+    // Entscheidung speichern und die Liste erneut laden
+    const handleDecision = async () => {
         if (!selectedAbweichung || user?.rolle !== "admin") return;
 
         setIsConfirming(true);
         setConfirmError(null);
         try {
-            const result = await confirmAbweichung(selectedAbweichung.id, kommentar || null);
+            const result = selectedAction === "verworfen"
+                ? await discardAbweichung(selectedAbweichung.id, kommentar)
+                : await confirmAbweichung(selectedAbweichung.id, kommentar || null);
             if (!result.success) {
-                setConfirmError(result.error ?? "Abweichung konnte nicht bestaetigt werden.");
+                setConfirmError(result.error ?? "Entscheidung konnte nicht gespeichert werden.");
                 return;
             }
             if (inventar) {
@@ -98,6 +105,30 @@ export default function AbweichungenPage() {
             setKommentar("");
         } catch {
             setConfirmError("Verbindung fehlgeschlagen. Bitte spaeter nochmals versuchen.");
+        } finally {
+            setIsConfirming(false);
+        }
+    };
+
+    const handleReopen = async (abweichung: AbweichungItem) => {
+        if (!inventar || user?.rolle !== "admin" || isConfirming) return;
+        if (!window.confirm(`Abweichung ${abweichung.primarschluessel} wieder eröffnen?`)) return;
+        setIsConfirming(true);
+        setActionError(null);
+        try {
+            const result = await reopenAbweichung(abweichung.id);
+            if (!result.success) {
+                setActionError(result.error ?? "Abweichung konnte nicht wieder eröffnet werden.");
+                return;
+            }
+            const [abw, st] = await Promise.all([
+                getAbweichungen(inventar.id),
+                getAbweichungStats(inventar.id),
+            ]);
+            setAbweichungen(abw);
+            setStats(st);
+        } catch {
+            setActionError("Verbindung fehlgeschlagen. Bitte später nochmals versuchen.");
         } finally {
             setIsConfirming(false);
         }
@@ -123,12 +154,7 @@ export default function AbweichungenPage() {
         }
 
         // Status-Filter
-        if (filterStatus === "offen" && a.bestaetigtAm !== null) {
-            return false;
-        }
-        if (filterStatus === "bestaetigt" && a.bestaetigtAm === null) {
-            return false;
-        }
+        if (filterStatus !== "alle" && a.status !== filterStatus) return false;
 
         return true;
     });
@@ -192,6 +218,9 @@ export default function AbweichungenPage() {
                         <span className="badge badge-lg badge-success gap-1">
                             {stats.bestaetigt} bestätigt
                         </span>
+                        <span className="badge badge-lg badge-ghost gap-1">
+                            {stats.verworfen} verworfen
+                        </span>
                     </div>
                 )}
             </div>
@@ -232,15 +261,18 @@ export default function AbweichungenPage() {
                         <select
                             className="select select-bordered"
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as "alle" | "offen" | "bestaetigt")}
+                            onChange={(e) => setFilterStatus(e.target.value as AbweichungStatus | "alle")}
                         >
                             <option value="alle">Alle Status</option>
                             <option value="offen">Offen</option>
                             <option value="bestaetigt">Bestätigt</option>
+                            <option value="verworfen">Verworfen</option>
                         </select>
                     </div>
                 </div>
             </div>
+
+            {actionError && <div className="alert alert-error">{actionError}</div>}
 
             {/* Abweichungen-Liste */}
             <div className="card bg-base-200">
@@ -272,13 +304,18 @@ export default function AbweichungenPage() {
                                         return (
                                             <tr
                                                 key={a.id}
-                                                className={a.bestaetigtAm ? "opacity-50" : ""}
+                                                className={a.status !== "offen" ? "opacity-75" : ""}
                                             >
                                                 <td>
-                                                    {a.bestaetigtAm ? (
+                                                    {a.status === "bestaetigt" ? (
                                                         <span className="badge badge-success gap-1">
                                                             <CheckCircle className="w-3 h-3" />
-                                                            OK
+                                                            Bestätigt
+                                                        </span>
+                                                    ) : a.status === "verworfen" ? (
+                                                        <span className="badge badge-ghost gap-1">
+                                                            <XCircle className="w-3 h-3" />
+                                                            Verworfen
                                                         </span>
                                                     ) : (
                                                         <span className="badge badge-warning gap-1">
@@ -304,17 +341,33 @@ export default function AbweichungenPage() {
                                                     )}
                                                 </td>
                                                 <td>
-                                                    {!a.bestaetigtAm && user?.rolle === "admin" && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedAbweichung(a);
-                                                                setKommentar("");
-                                                            }}
-                                                            className="btn btn-sm btn-primary gap-1"
-                                                        >
-                                                            <CheckCircle className="w-4 h-4" />
-                                                            Bestätigen
-                                                        </button>
+                                                    {user?.rolle === "admin" && (
+                                                        <div className="flex gap-2">
+                                                            {a.status === "offen" ? (
+                                                                <>
+                                                                    <button onClick={() => {
+                                                                        setSelectedAbweichung(a);
+                                                                        setSelectedAction("bestaetigt");
+                                                                        setKommentar("");
+                                                                        setConfirmError(null);
+                                                                    }} className="btn btn-sm btn-primary" disabled={isConfirming}>
+                                                                        Bestätigen
+                                                                    </button>
+                                                                    <button onClick={() => {
+                                                                        setSelectedAbweichung(a);
+                                                                        setSelectedAction("verworfen");
+                                                                        setKommentar("");
+                                                                        setConfirmError(null);
+                                                                    }} className="btn btn-sm btn-ghost" disabled={isConfirming}>
+                                                                        Verwerfen
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <button onClick={() => handleReopen(a)} className="btn btn-sm btn-outline" disabled={isConfirming}>
+                                                                    Wieder eröffnen
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>
@@ -331,7 +384,7 @@ export default function AbweichungenPage() {
             {selectedAbweichung && user?.rolle === "admin" && (
                 <dialog className="modal modal-open">
                     <div className="modal-box">
-                        <h3 className="font-bold text-lg mb-4">Abweichung bestätigen</h3>
+                        <h3 className="font-bold text-lg mb-4">Abweichung {selectedAction === "verworfen" ? "verwerfen" : "bestätigen"}</h3>
 
                         <div className="space-y-4">
                             <div className="bg-base-200 p-4 rounded-lg">
@@ -343,7 +396,7 @@ export default function AbweichungenPage() {
 
                             <div className="form-control">
                                 <label className="label">
-                                    <span className="label-text">Kommentar (optional)</span>
+                                    <span className="label-text">{selectedAction === "verworfen" ? "Grund (erforderlich)" : "Kommentar (optional)"}</span>
                                 </label>
                                 <textarea
                                     className="textarea textarea-bordered"
@@ -366,19 +419,19 @@ export default function AbweichungenPage() {
                                 Abbrechen
                             </button>
                             <button
-                                onClick={handleConfirm}
-                                className="btn btn-success gap-2"
+                                onClick={handleDecision}
+                                className={`btn gap-2 ${selectedAction === "verworfen" ? "btn-warning" : "btn-success"}`}
                                 disabled={isConfirming}
                             >
                                 {isConfirming ? (
                                     <>
                                         <span className="loading loading-spinner loading-sm"></span>
-                                        Wird bestätigt...
+                                        Wird gespeichert...
                                     </>
                                 ) : (
                                     <>
-                                        <CheckCircle className="w-5 h-5" />
-                                        Bestätigen
+                                        {selectedAction === "verworfen" ? <XCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                                        {selectedAction === "verworfen" ? "Verwerfen" : "Bestätigen"}
                                     </>
                                 )}
                             </button>

@@ -56,9 +56,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
                     },
                 },
             }),
-            // Offene Abweichungen zählen (nicht bestätigt)
+            // Nur noch nicht entschiedene Abweichungen zählen.
             prisma.abweichung.count({
-                where: { bestaetigtDurchId: null },
+                where: { status: "offen" },
             }),
             // Heute gescannte Waren zählen
             prisma.wareIst.count({

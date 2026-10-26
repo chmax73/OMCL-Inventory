@@ -20,6 +20,7 @@ import {
     Search,
 } from "lucide-react";
 import { useUser } from "@/context/UserContext";
+import { getUppercaseBarcodeSuggestion } from "@/lib/barcode-validation";
 import {
     getActiveInventar,
     getLagerplaetze,
@@ -132,7 +133,20 @@ export default function ScanPage() {
     // Barcode scannen
     const handleScan = async () => {
         if (!barcode.trim() || !inventar || !selectedLagerplatz || !user || scanInFlightRef.current) return;
-        const scannedBarcode = barcode.trim();
+        let scannedBarcode = barcode.trim();
+        const suggestion = getUppercaseBarcodeSuggestion(scannedBarcode, inventar.typ);
+        if (suggestion) {
+            const confirmed = window.confirm(
+                `Meinten Sie "${suggestion}" mit grossem ${suggestion[0]}? Nur mit "Ja" wird dieser Barcode geprüft.`
+            );
+            if (!confirmed) {
+                setLastScanResult({ success: false, error: "Ungültiger Barcode. Bitte mit dem richtigen Grossbuchstaben eingeben." });
+                playErrorBeep();
+                barcodeInputRef.current?.focus();
+                return;
+            }
+            scannedBarcode = suggestion;
+        }
         const lagerplatzCode = selectedLagerplatz;
         const inventarId = inventar.id;
         scanInFlightRef.current = true;
@@ -190,12 +204,22 @@ export default function ScanPage() {
             setFehlendeWarenCount(result.fehlendeWaren || 0);
             // Zurück zur Lagerplatz-Auswahl nach längerem Timeout wenn Abweichungen
             setTimeout(async () => {
-                // Lagerplätze neu laden damit Status sofort aktualisiert wird
-                const plaetze = await getLagerplaetze(inventar.id);
-                setLagerplaetze(plaetze);
-                setSelectedLagerplatz(null);
-                setIsUeberprueft(false);
-                setFehlendeWarenCount(null);
+                try {
+                    // Auch den Gesamtzähler aktualisieren, bevor die Übersicht erscheint.
+                    const [aktuellesInventar, plaetze] = await Promise.all([
+                        getActiveInventar(inventar.id),
+                        getLagerplaetze(inventar.id),
+                    ]);
+                    ++refreshVersionRef.current;
+                    setInventar(aktuellesInventar);
+                    setLagerplaetze(plaetze);
+                    setSelectedLagerplatz(null);
+                    setIsUeberprueft(false);
+                    setFehlendeWarenCount(null);
+                } catch (error) {
+                    console.error("Lagerplatz-Übersicht konnte nicht aktualisiert werden:", error);
+                    setLastScanResult({ success: false, error: "Übersicht konnte nicht aktualisiert werden. Bitte Seite neu laden." });
+                }
             }, result.fehlendeWaren && result.fehlendeWaren > 0 ? 3000 : 1500);
         }
 

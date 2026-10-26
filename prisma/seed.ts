@@ -236,6 +236,7 @@ async function main() {
             inventarId: inventarMuster.id,
             primarschluessel: "M-022274",
             typ: AbweichungTyp.fehlend,
+            status: "offen" as const,
             kommentar: null,
             bestaetigtDurchId: null,
         },

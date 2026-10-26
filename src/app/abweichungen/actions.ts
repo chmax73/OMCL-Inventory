@@ -9,15 +9,16 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser, requireAuthenticatedAppUser } from "@/lib/auth/identity";
-import { confirmAbweichungSchema } from "@/lib/abweichung-validation";
+import { canChangeAbweichungStatus, confirmAbweichungSchema, discardAbweichungSchema, reopenAbweichungSchema } from "@/lib/abweichung-validation";
 import { revalidatePath } from "next/cache";
-import { AbweichungTyp } from "@prisma/client";
+import { AbweichungStatus, AbweichungTyp } from "@prisma/client";
 
 // Typ für eine Abweichung in der Liste
 export type AbweichungItem = {
     id: string;
     primarschluessel: string;
     typ: AbweichungTyp;
+    status: AbweichungStatus;
     kommentar: string | null;
     bestaetigtAm: Date | null;
     bestaetigtDurch: string | null;
@@ -68,6 +69,7 @@ export async function getAbweichungen(inventarId: string): Promise<AbweichungIte
             id: a.id,
             primarschluessel: a.primarschluessel,
             typ: a.typ,
+            status: a.status,
             kommentar: a.kommentar,
             bestaetigtAm: a.bestaetigtAm,
             bestaetigtDurch: a.bestaetigtDurch?.name || null,
@@ -77,61 +79,66 @@ export async function getAbweichungen(inventarId: string): Promise<AbweichungIte
     });
 }
 
-// Abweichung bestätigen
-export async function confirmAbweichung(
+async function changeAbweichungStatus(
     abweichungId: string,
+    status: AbweichungStatus,
     kommentar: string | null
 ): Promise<{ success: boolean; error?: string }> {
-    const parsed = confirmAbweichungSchema.safeParse({ abweichungId, kommentar });
-    if (!parsed.success) {
-        return { success: false, error: parsed.error.issues[0]?.message ?? "Eingaben sind ungueltig." };
-    }
-
     let user;
     try {
         user = await requireAdminUser();
     } catch {
-        return { success: false, error: "Nur angemeldete Admins koennen Abweichungen bestaetigen." };
+        return { success: false, error: "Nur angemeldete Admins koennen Abweichungen bearbeiten." };
     }
 
     try {
         const abweichung = await prisma.abweichung.findUnique({
-            where: { id: parsed.data.abweichungId },
-            select: { inventarId: true, primarschluessel: true },
+            where: { id: abweichungId },
+            select: { inventarId: true, primarschluessel: true, status: true },
         });
         if (!abweichung) return { success: false, error: "Abweichung nicht gefunden." };
+        if (!canChangeAbweichungStatus(abweichung.status, status)) {
+            return { success: false, error: "Dieser Statuswechsel ist nicht möglich. Bitte die Abweichung zuerst wieder eröffnen." };
+        }
 
         const updated = await prisma.$transaction(async (tx) => {
             const result = await tx.abweichung.updateMany({
                 where: {
-                    id: parsed.data.abweichungId,
-                    bestaetigtAm: null,
+                    id: abweichungId,
+                    status: abweichung.status,
                     inventar: { is: { abgeschlossen: false, archiviert: false } },
                 },
                 data: {
-                    bestaetigtDurchId: user.id,
-                    bestaetigtAm: new Date(),
-                    kommentar: parsed.data.kommentar || undefined,
+                    status,
+                    bestaetigtDurchId: status === AbweichungStatus.bestaetigt ? user.id : null,
+                    bestaetigtAm: status === AbweichungStatus.bestaetigt ? new Date() : null,
+                    kommentar: status === AbweichungStatus.offen ? null : kommentar,
                 },
             });
             if (result.count === 0) return false;
             await tx.auditTrail.create({
                 data: {
                     userId: user.id,
-                    aktion: "abweichung_bestaetigt",
+                    aktion: status === AbweichungStatus.offen
+                        ? "abweichung_wiedereroeffnet"
+                        : status === AbweichungStatus.verworfen
+                            ? "abweichung_verworfen"
+                            : "abweichung_bestaetigt",
                     entitaet: "abweichung",
-                    referenzId: parsed.data.abweichungId,
+                    referenzId: abweichungId,
                     inventarId: abweichung.inventarId,
                     details: JSON.stringify({
                         primarschluessel: abweichung.primarschluessel,
-                        kommentar: parsed.data.kommentar,
+                        vorherigerStatus: abweichung.status,
+                        status,
+                        kommentar,
                     }),
                 },
             });
             return true;
         });
         if (!updated) {
-            return { success: false, error: "Abweichung ist bereits bestaetigt oder das Inventar ist abgeschlossen." };
+            return { success: false, error: "Status wurde inzwischen geändert oder das Inventar ist abgeschlossen." };
         }
 
         revalidatePath("/abweichungen");
@@ -139,15 +146,34 @@ export async function confirmAbweichung(
         revalidatePath("/");
         return { success: true };
     } catch (error) {
-        console.error("Fehler beim Bestätigen:", error instanceof Error ? error.name : "unbekannt");
-        return { success: false, error: "Abweichung konnte nicht bestätigt werden" };
+        console.error("Fehler beim Ändern des Abweichungsstatus:", error instanceof Error ? error.name : "unbekannt");
+        return { success: false, error: "Abweichungsstatus konnte nicht geändert werden." };
     }
+}
+
+export async function confirmAbweichung(abweichungId: string, kommentar: string | null) {
+    const parsed = confirmAbweichungSchema.safeParse({ abweichungId, kommentar });
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message };
+    return changeAbweichungStatus(parsed.data.abweichungId, AbweichungStatus.bestaetigt, parsed.data.kommentar);
+}
+
+export async function discardAbweichung(abweichungId: string, kommentar: string) {
+    const parsed = discardAbweichungSchema.safeParse({ abweichungId, kommentar });
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message };
+    return changeAbweichungStatus(parsed.data.abweichungId, AbweichungStatus.verworfen, parsed.data.kommentar);
+}
+
+export async function reopenAbweichung(abweichungId: string) {
+    const parsed = reopenAbweichungSchema.safeParse({ abweichungId });
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message };
+    return changeAbweichungStatus(parsed.data.abweichungId, AbweichungStatus.offen, null);
 }
 
 // Statistik für Abweichungen
 export async function getAbweichungStats(inventarId: string): Promise<{
     total: number;
     bestaetigt: number;
+    verworfen: number;
     offen: number;
     nachTyp: { typ: AbweichungTyp; count: number }[];
 }> {
@@ -157,13 +183,14 @@ export async function getAbweichungStats(inventarId: string): Promise<{
         where: { inventarId },
         select: {
             typ: true,
-            bestaetigtAm: true,
+            status: true,
         },
     });
 
     const total = abweichungen.length;
-    const bestaetigt = abweichungen.filter(a => a.bestaetigtAm !== null).length;
-    const offen = total - bestaetigt;
+    const bestaetigt = abweichungen.filter(a => a.status === AbweichungStatus.bestaetigt).length;
+    const verworfen = abweichungen.filter(a => a.status === AbweichungStatus.verworfen).length;
+    const offen = total - bestaetigt - verworfen;
 
     // Nach Typ gruppieren
     const typCounts = new Map<AbweichungTyp, number>();
@@ -173,5 +200,5 @@ export async function getAbweichungStats(inventarId: string): Promise<{
 
     const nachTyp = Array.from(typCounts.entries()).map(([typ, count]) => ({ typ, count }));
 
-    return { total, bestaetigt, offen, nachTyp };
+    return { total, bestaetigt, verworfen, offen, nachTyp };
 }
